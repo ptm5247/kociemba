@@ -1,6 +1,8 @@
 #ifndef SEARCH_H
 #define SEARCH_H
 
+#include <stdint.h>
+
 typedef struct {
     int ax[31];             // The axis of the move
     int po[31];             // The power of the move
@@ -23,19 +25,19 @@ search_t* get_search(void);
 char* solutionToString(search_t* search, int length, int depthPhase1);
 /**
  * Computes the solver string for a given cube.
- * 
+ *
  * @param facelets
  *          is the cube definition string, see {@link Facelet} for the format.
- * 
+ *
  * @param maxDepth
  *          defines the maximal allowed maneuver length. For random cubes, a maxDepth of 21 usually will return a
  *          solution in less than 0.5 seconds. With a maxDepth of 20 it takes a few seconds on average to find a
  *          solution, but it may take much longer for specific cubes.
- * 
+ *
  *@param timeOut
  *          defines the maximum computing time of the method in seconds. If it does not return with a solution, it returns with
  *          an error code.
- * 
+ *
  * @param useSeparator
  *          determines if a " . " separates the phase1 and phase2 parts of the solver string like in F' R B R L2 F .
  *          U2 U D for example.<br>

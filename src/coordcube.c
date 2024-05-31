@@ -1,4 +1,5 @@
 #include <sys/types.h>
+#include <stdint.h>
 #include <stdio.h>
 #include "prunetable_helpers.h"
 #include "coordcube.h"
@@ -60,6 +61,7 @@ void initPruning(const char *cache_dir)
 {
     cubiecube_t* a;
     cubiecube_t* moveCube = get_moveCube();
+    uint64_t cache_size = 0;
 
     if(check_cached_table("twistMove", (void*) twistMove, sizeof(twistMove), cache_dir) != 0) {
         short i;
@@ -207,7 +209,6 @@ void initPruning(const char *cache_dir)
         for (i = 0; i < N_SLICE2 * N_URFtoDLF * N_PARITY / 2; i++)
             Slice_URFtoDLF_Parity_Prun[i] = -1;
         setPruning(Slice_URFtoDLF_Parity_Prun, 0, 0);
-        printf("1\n");
         while (done != N_SLICE2 * N_URFtoDLF * N_PARITY) {
             // printf("%d %d %d\n", done, N_SLICE2 * N_URFtoDLF * N_PARITY, depth);
             for (i = 0; i < N_SLICE2 * N_URFtoDLF * N_PARITY; i++) {
@@ -244,9 +245,7 @@ void initPruning(const char *cache_dir)
             }
             depth++;
         }
-        printf("2\n");
         dump_to_file((void*) Slice_URFtoDLF_Parity_Prun, sizeof(Slice_URFtoDLF_Parity_Prun), "Slice_URFtoDLF_Parity_Prun", cache_dir);
-        printf("3\n");
     }
 
     if(check_cached_table("Slice_URtoDF_Parity_Prun", (void*) Slice_URtoDF_Parity_Prun, sizeof(Slice_URtoDF_Parity_Prun), cache_dir) != 0) {
@@ -342,6 +341,14 @@ void initPruning(const char *cache_dir)
         }
         dump_to_file((void*) Slice_Flip_Prun, sizeof(Slice_Flip_Prun), "Slice_Flip_Prun", cache_dir);
     }
+
+    cache_size =
+        sizeof(twistMove) + sizeof(flipMove) + sizeof(parityMove) +
+        sizeof(FRtoBR_Move) + sizeof(URFtoDLF_Move) + sizeof(URtoDF_Move) +
+        sizeof(URtoUL_Move) + sizeof(UBtoDF_Move) + sizeof(MergeURtoULandUBtoDF) +
+        sizeof(Slice_URFtoDLF_Parity_Prun) + sizeof(Slice_URtoDF_Parity_Prun) +
+        sizeof(Slice_Twist_Prun) + sizeof(Slice_Flip_Prun);
+    printf("Cache Size: %ld\n", cache_size);
 
     PRUNING_INITED = 1;
 }

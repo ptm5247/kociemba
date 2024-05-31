@@ -9,6 +9,8 @@
 #define MIN(a, b) (((a)<(b))?(a):(b))
 #define MAX(a, b) (((a)>(b))?(a):(b))
 
+uint64_t p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
+
 char* solutionToString(search_t* search, int length, int depthPhase1)
 {
     char* s = (char*) calloc(length * 3 + 5, 1);
@@ -174,6 +176,8 @@ char* solution(char* facelets, int maxDepth, long timeOut, int useSeparator, con
                 busy = 0;
         } while (busy);
 
+        p1 += 1; // number of nodes expanded in phase 1
+
         // +++++++++++++ compute new coordinates and new minDistPhase1 ++++++++++
         // if minDistPhase1 =0, the H subgroup is reached
         mv = 3 * search->ax[n] + search->po[n] - 1;
@@ -187,6 +191,9 @@ char* solution(char* facelets, int maxDepth, long timeOut, int useSeparator, con
         // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         // System.out.format("%d %d\n", n, depthPhase1);
         if (search->minDistPhase1[n + 1] == 0 && n >= depthPhase1 - 5) {
+
+            p2 += 1; // number of phase 1 solutions found
+
             search->minDistPhase1[n + 1] = 10;// instead of 10 any value >5 is possible
             if (n == depthPhase1 - 1 && (s = totalDepth(search, depthPhase1, maxDepth)) >= 0) {
                 if (s == depthPhase1
@@ -242,6 +249,8 @@ int totalDepth(search_t* search, int depthPhase1, int maxDepth)
     if ((search->minDistPhase2[depthPhase1] = MAX(d1, d2)) == 0)// already solved
         return depthPhase1;
 
+    p3 += 1; // number of phase 2 trees explored (prune value <= 10)
+
     // now set up search
 
     depthPhase2 = 1;
@@ -293,6 +302,9 @@ int totalDepth(search_t* search, int depthPhase1, int maxDepth)
             } else
                 busy = 0;
         } while (busy);
+
+        p4 += 1; // number of nodes expanded phase 2
+
         // +++++++++++++ compute new coordinates and new minDist ++++++++++
         mv = 3 * search->ax[n] + search->po[n] - 1;
 
@@ -309,6 +321,9 @@ int totalDepth(search_t* search, int depthPhase1, int maxDepth)
         // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
     } while (search->minDistPhase2[n + 1] != 0);
+
+    p5 += 1; // number of phase 2 solutions found
+
     return depthPhase1 + depthPhase2;
 }
 
