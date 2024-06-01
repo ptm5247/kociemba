@@ -5,22 +5,32 @@ INCLUDEDIR = include
 CACHEDIR = cache
 
 CC = gcc
-CFLAGS = -O3
+CFLAGS = -O3 -Wunused-function
+
+PYTHON = python3
 
 TEST = test
 TEST_INPUT = javares.txt
 
-VERSION = 0.0
+VERSION = 0.1
 
-$(BINDIR)/$(TEST): $(TESTDIR)/test.c $(SRCDIR)/* $(INCLUDEDIR)/*
+$(CACHEDIR): $(SRCDIR)/cache.py
+	@echo Rewriting Cache...
+	@rm -rf $(CACHEDIR)/*
+	@$(PYTHON) $(SRCDIR)/cache.py
+	@touch $(CACHEDIR)
+	@echo
+
+$(BINDIR)/$(TEST): $(TESTDIR)/test.c $(SRCDIR)/*.c $(INCLUDEDIR)/*.h
 	@mkdir -p $(BINDIR) $(CACHEDIR)
-	@$(CC) $(CFLAGS) -o $@ $(TESTDIR)/test.c $(SRCDIR)/* -I$(INCLUDEDIR)
+	@$(CC) $(CFLAGS) -o $@ $(TESTDIR)/test.c $(SRCDIR)/*.c -I$(INCLUDEDIR)
 
-test: $(BINDIR)/$(TEST) FORCE
+test: $(BINDIR)/$(TEST) $(CACHEDIR) FORCE
 	@echo Version $(VERSION)
 	@time $(BINDIR)/$(TEST) < $(TESTDIR)/$(TEST_INPUT)
 
-clean:
-	rm -rf $(CACHEDIR)/*
+ifneq ($(CACHEDIR),cache)
+cache: $(CACHEDIR)
+endif
 
 FORCE: ;

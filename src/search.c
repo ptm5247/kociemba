@@ -1,348 +1,276 @@
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+#include "cache.h"
+#include "cube.h"
 #include "search.h"
-#include "color.h"
-#include "facecube.h"
-#include "coordcube.h"
 
 #define MIN(a, b) (((a)<(b))?(a):(b))
 #define MAX(a, b) (((a)>(b))?(a):(b))
 
 uint64_t p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
 
-char* solutionToString(search_t* search, int length, int depthPhase1)
-{
-    char* s = (char*) calloc(length * 3 + 5, 1);
-    int cur = 0, i;
-    for (i = 0; i < length; i++) {
-        switch (search->ax[i]) {
-        case 0:
-            s[cur++] = 'U';
-            break;
-        case 1:
-            s[cur++] = 'R';
-            break;
-        case 2:
-            s[cur++] = 'F';
-            break;
-        case 3:
-            s[cur++] = 'D';
-            break;
-        case 4:
-            s[cur++] = 'L';
-            break;
-        case 5:
-            s[cur++] = 'B';
-            break;
-        }
-        switch (search->po[i]) {
-        case 1:
-            s[cur++] = ' ';
-            break;
-        case 2:
-            s[cur++] = '2';
-            s[cur++] = ' ';
-            break;
-        case 3:
-            s[cur++] = '\'';
-            s[cur++] = ' ';
-            break;
-        }
-        if (i == depthPhase1 - 1) {
-            s[cur++] = '.';
-            s[cur++] = ' ';
-        }
-    }
-    return s;
-}
+static void solution_to_string(search_t* search, int length, int phase1_depth, char *solution);
+static int totalDepth(search_t* search, int phase1_depth, int maxDepth);
 
+bool solution(const char *cubestring, options_t *options, char* solution) {
+  search_t    search;
+  facecube_t  facecube;
+  cubiecube_t cubiecube;
+  coordcube_t coordcube;
 
-char* solution(char* facelets, int maxDepth, long timeOut, int useSeparator, const char* cache_dir)
-{
-    search_t* search = (search_t*) calloc(1, sizeof(search_t));
-    facecube_t* fc;
-    cubiecube_t* cc;
-    coordcube_t* c;
+  int     phase1_depth, total_depth;
+  int     move, n;
+  bool    busy;
+  time_t  start_time;
 
-    int s, i;
-    int mv, n;
-    int busy;
-    int depthPhase1;
-    time_t tStart;
-    // +++++++++++++++++++++check for wrong input +++++++++++++++++++++++++++++
-    int count[6] = {0};
+  // ------------------------------- validation --------------------------------
 
-    if (PRUNING_INITED == 0) {
-        initPruning(cache_dir);
-    }
+  if (!validate_string(cubestring)) return false;
+  string_to_facecube(cubestring, &facecube);
+  facecube_to_cubiecube(&facecube, &cubiecube);
+  if (!validate_cubiecube(&cubiecube)) return false;
+  cubiecube_to_coordcube(&cubiecube, &coordcube);
 
-    for (i = 0; i < 54; i++)
-        switch(facelets[i]) {
-            case 'U':
-                count[U]++;
-                break;
-            case 'R':
-                count[R]++;
-                break;
-            case 'F':
-                count[F]++;
-                break;
-            case 'D':
-                count[D]++;
-                break;
-            case 'L':
-                count[L]++;
-                break;
-            case 'B':
-                count[B]++;
-                break;
-        }
+  // ----------------------------- initialization ------------------------------
 
-    for (i = 0; i < 6; i++)
-        if (count[i] != 9) {
-            free(search);
-            return NULL;
-        }
+  if (!CACHE_OK) init_cache(options->cache_dir);
 
-    fc = get_facecube_fromstring(facelets);
-    cc = toCubieCube(fc);
-    if ((s = verify(cc)) != 0) {
-        free(search);
-        return NULL;
-    }
+  search.power[0] = 0;
+  search.axis[0] = 0;
+  search.flip[0] = coordcube.flip;
+  search.twist[0] = coordcube.twist;
+  search.parity[0] = coordcube.parity;
+  search.slice1[0] = coordcube.slice2 / 24;
+  search.corner[0] = coordcube.corner;
+  search.slice2[0] = coordcube.slice2;
+  search.edgeU[0] = coordcube.edgeU;
+  search.edgeD[0] = coordcube.edgeD;
 
-    // +++++++++++++++++++++++ initialization +++++++++++++++++++++++++++++++++
-    c = get_coordcube(cc);
+  search.min_phase1_dist[1] = 1;// else failure for depth=1, n=0
+  move = 0;
+  n = 0;
+  busy = false;
+  phase1_depth = 1;
 
-    search->po[0] = 0;
-    search->ax[0] = 0;
-    search->flip[0] = c->flip;
-    search->twist[0] = c->twist;
-    search->parity[0] = c->parity;
-    search->slice[0] = c->FRtoBR / 24;
-    search->URFtoDLF[0] = c->URFtoDLF;
-    search->FRtoBR[0] = c->FRtoBR;
-    search->URtoUL[0] = c->URtoUL;
-    search->UBtoDF[0] = c->UBtoDF;
+  start_time = time(NULL);
 
-    search->minDistPhase1[1] = 1;// else failure for depth=1, n=0
-    mv = 0;
-    n = 0;
-    busy = 0;
-    depthPhase1 = 1;
-
-    tStart = time(NULL);
-
-    // +++++++++++++++++++ Main loop ++++++++++++++++++++++++++++++++++++++++++
+  // -------------------------------- main loop --------------------------------
+  do {
     do {
-        do {
-            if ((depthPhase1 - n > search->minDistPhase1[n + 1]) && !busy) {
+      if ((phase1_depth - n > search.min_phase1_dist[n + 1]) && !busy) {
+        if (search.axis[n] == 0 || search.axis[n] == 3)// Initialize next move
+          search.axis[++n] = 1;
+        else
+          search.axis[++n] = 0;
+        search.power[n] = 1;
+      } else if (++search.power[n] > 3) {
+        do {// increment axis
+          if (++search.axis[n] > 5) {
 
-                if (search->ax[n] == 0 || search->ax[n] == 3)// Initialize next move
-                    search->ax[++n] = 1;
-                else
-                    search->ax[++n] = 0;
-                search->po[n] = 1;
-            } else if (++search->po[n] > 3) {
-                do {// increment axis
-                    if (++search->ax[n] > 5) {
+            if (time(NULL) - start_time > options->timeout_sec)
+              return false;
 
-                        if (time(NULL) - tStart > timeOut)
-                            return NULL;
-
-                        if (n == 0) {
-                            if (depthPhase1 >= maxDepth)
-                                return NULL;
-                            else {
-                                depthPhase1++;
-                                search->ax[n] = 0;
-                                search->po[n] = 1;
-                                busy = 0;
-                                break;
-                            }
-                        } else {
-                            n--;
-                            busy = 1;
-                            break;
-                        }
-
-                    } else {
-                        search->po[n] = 1;
-                        busy = 0;
-                    }
-                } while (n != 0 && (search->ax[n - 1] == search->ax[n] || search->ax[n - 1] - 3 == search->ax[n]));
-            } else
-                busy = 0;
-        } while (busy);
-
-        p1 += 1; // number of nodes expanded in phase 1
-
-        // +++++++++++++ compute new coordinates and new minDistPhase1 ++++++++++
-        // if minDistPhase1 =0, the H subgroup is reached
-        mv = 3 * search->ax[n] + search->po[n] - 1;
-        search->flip[n + 1] = flipMove[search->flip[n]][mv];
-        search->twist[n + 1] = twistMove[search->twist[n]][mv];
-        search->slice[n + 1] = FRtoBR_Move[search->slice[n] * 24][mv] / 24;
-        search->minDistPhase1[n + 1] = MAX(
-            getPruning(Slice_Flip_Prun, N_SLICE1 * search->flip[n + 1] + search->slice[n + 1]),
-            getPruning(Slice_Twist_Prun, N_SLICE1 * search->twist[n + 1] + search->slice[n + 1])
-        );
-        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-        // System.out.format("%d %d\n", n, depthPhase1);
-        if (search->minDistPhase1[n + 1] == 0 && n >= depthPhase1 - 5) {
-
-            p2 += 1; // number of phase 1 solutions found
-
-            search->minDistPhase1[n + 1] = 10;// instead of 10 any value >5 is possible
-            if (n == depthPhase1 - 1 && (s = totalDepth(search, depthPhase1, maxDepth)) >= 0) {
-                if (s == depthPhase1
-                        || (search->ax[depthPhase1 - 1] != search->ax[depthPhase1] && search->ax[depthPhase1 - 1] != search->ax[depthPhase1] + 3)) {
-                    char* res;
-                    free((void*) fc);
-                    free((void*) cc);
-                    free((void*) c);
-                    if (useSeparator) {
-                        res = solutionToString(search, s, depthPhase1);
-                    } else {
-                        res = solutionToString(search, s, -1);
-                    }
-                    free((void*) search);
-                    return res;
-                }
+            if (n == 0) {
+              if (phase1_depth >= options->max_depth)
+                return false;
+              else {
+                phase1_depth++;
+                search.axis[n] = 0;
+                search.power[n] = 1;
+                busy = false;
+                break;
+              }
+            } else {
+              n--;
+              busy = true;
+              break;
             }
 
+          } else {
+            search.power[n] = 1;
+            busy = false;
+          }
+        } while (n != 0 && (search.axis[n - 1] == search.axis[n] || search.axis[n - 1] - 3 == search.axis[n]));
+      } else
+        busy = false;
+    } while (busy);
+
+    p1 += 1; // number of nodes expanded in phase 1
+
+    // +++++++++++++ compute new coordinates and new min_phase1_dist ++++++++++
+    // if min_phase1_dist =0, the H subgroup is reached
+    move = 3 * search.axis[n] + search.power[n] - 1;
+    search.flip[n + 1] = MOVE_FLIP[search.flip[n]][move];
+    search.twist[n + 1] = MOVE_TWIST[search.twist[n]][move];
+    search.slice1[n + 1] = MOVE_SLICE[search.slice1[n] * 24][move] / 24;
+    search.min_phase1_dist[n + 1] = MAX(
+      getPruning(PRUNE_FLIP, N_SLICE1 * search.flip[n + 1] + search.slice1[n + 1]),
+      getPruning(PRUNE_TWIST, N_SLICE1 * search.twist[n + 1] + search.slice1[n + 1])
+    );
+    // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    if (search.min_phase1_dist[n + 1] == 0 && n >= phase1_depth - 5) {
+
+      p2 += 1; // number of phase 1 solutions found
+
+      search.min_phase1_dist[n + 1] = 10;// instead of 10 any value >5 is possible
+      if (n == phase1_depth - 1 && (total_depth = totalDepth(&search, phase1_depth, options->max_depth)) >= 0) {
+        if (total_depth == phase1_depth
+            || (search.axis[phase1_depth - 1] != search.axis[phase1_depth] && search.axis[phase1_depth - 1] != search.axis[phase1_depth] + 3)) {
+          if (options->use_separator) {
+            solution_to_string(&search, total_depth, phase1_depth, solution);
+          } else {
+            solution_to_string(&search, total_depth, -1, solution);
+          }
+          return true;
         }
-    } while (1);
+      }
+
+    }
+  } while (1);
 }
 
-int totalDepth(search_t* search, int depthPhase1, int maxDepth)
-{
-    int mv = 0, d1 = 0, d2 = 0, i;
-    int maxDepthPhase2 = MIN(10, maxDepth - depthPhase1);// Allow only max 10 moves in phase2
-    int depthPhase2;
-    int n;
-    int busy;
-    for (i = 0; i < depthPhase1; i++) {
-        mv = 3 * search->ax[i] + search->po[i] - 1;
-        // System.out.format("%d %d %d %d\n", i, mv, ax[i], po[i]);
-        search->URFtoDLF[i + 1] = URFtoDLF_Move[search->URFtoDLF[i]][mv];
-        search->FRtoBR[i + 1] = FRtoBR_Move[search->FRtoBR[i]][mv];
-        search->parity[i + 1] = parityMove[search->parity[i]][mv];
-    }
+static int totalDepth(search_t* search, int phase1_depth, int max_depth) {
+  int move = 0, d1 = 0, d2 = 0, i;
+  int max_phase2_depth = MIN(10, max_depth - phase1_depth);// Allow only max 10 moves in phase2
+  int phase2_depth;
+  int n;
+  bool busy;
 
-    if ((d1 = getPruning(Slice_URFtoDLF_Parity_Prun,
-            (N_SLICE2 * search->URFtoDLF[depthPhase1] + search->FRtoBR[depthPhase1]) * 2 + search->parity[depthPhase1])) > maxDepthPhase2)
-        return -1;
+  for (i = 0; i < phase1_depth; i++) {
+    move = 3 * search->axis[i] + search->power[i] - 1;
+    search->corner[i + 1] = MOVE_CORNER[search->corner[i]][move];
+    search->slice2[i + 1] = MOVE_SLICE[search->slice2[i]][move];
+    search->parity[i + 1] = MOVE_PARITY[search->parity[i]][move];
+  }
 
-    for (i = 0; i < depthPhase1; i++) {
-        mv = 3 * search->ax[i] + search->po[i] - 1;
-        search->URtoUL[i + 1] = URtoUL_Move[search->URtoUL[i]][mv];
-        search->UBtoDF[i + 1] = UBtoDF_Move[search->UBtoDF[i]][mv];
-    }
-    search->URtoDF[depthPhase1] = MergeURtoULandUBtoDF[search->URtoUL[depthPhase1]][search->UBtoDF[depthPhase1]];
+  if ((d1 = getPruning(PRUNE_CORNER,
+      (N_SLICE2 * search->corner[phase1_depth] + search->slice2[phase1_depth]) * 2 + search->parity[phase1_depth])) > max_phase2_depth)
+    return -1;
 
-    if ((d2 = getPruning(Slice_URtoDF_Parity_Prun,
-            (N_SLICE2 * search->URtoDF[depthPhase1] + search->FRtoBR[depthPhase1]) * 2 + search->parity[depthPhase1])) > maxDepthPhase2)
-        return -1;
+  for (i = 0; i < phase1_depth; i++) {
+    move = 3 * search->axis[i] + search->power[i] - 1;
+    search->edgeU[i + 1] = MOVE_EDGE_U[search->edgeU[i]][move];
+    search->edgeD[i + 1] = MOVE_EDGE_D[search->edgeD[i]][move];
+  }
+  search->edgeUD[phase1_depth] = MERGE_EDGE_UD[search->edgeU[phase1_depth]][search->edgeD[phase1_depth]];
 
-    if ((search->minDistPhase2[depthPhase1] = MAX(d1, d2)) == 0)// already solved
-        return depthPhase1;
+  if ((d2 = getPruning(PRUNE_EDGE,
+      (N_SLICE2 * search->edgeUD[phase1_depth] + search->slice2[phase1_depth]) * 2 + search->parity[phase1_depth])) > max_phase2_depth)
+    return -1;
 
-    p3 += 1; // number of phase 2 trees explored (prune value <= 10)
+  if ((search->min_phase2_dist[phase1_depth] = MAX(d1, d2)) == 0)// already solved
+    return phase1_depth;
 
-    // now set up search
+  p3 += 1; // number of phase 2 trees explored (prune value <= 10)
 
-    depthPhase2 = 1;
-    n = depthPhase1;
-    busy = 0;
-    search->po[depthPhase1] = 0;
-    search->ax[depthPhase1] = 0;
-    search->minDistPhase2[n + 1] = 1;// else failure for depthPhase2=1, n=0
-    // +++++++++++++++++++ end initialization +++++++++++++++++++++++++++++++++
+  // now set up search
+
+  phase2_depth = 1;
+  n = phase1_depth;
+  busy = false;
+  search->power[phase1_depth] = 0;
+  search->axis[phase1_depth] = 0;
+  search->min_phase2_dist[n + 1] = 1;// else failure for depthPhase2=1, n=0
+  // +++++++++++++++++++ end initialization +++++++++++++++++++++++++++++++++
+  do {
     do {
-        do {
-            if ((depthPhase1 + depthPhase2 - n > search->minDistPhase2[n + 1]) && !busy) {
+      if ((phase1_depth + phase2_depth - n > search->min_phase2_dist[n + 1]) && !busy) {
 
-                if (search->ax[n] == 0 || search->ax[n] == 3)// Initialize next move
-                {
-                    search->ax[++n] = 1;
-                    search->po[n] = 2;
-                } else {
-                    search->ax[++n] = 0;
-                    search->po[n] = 1;
-                }
-            } else if ((search->ax[n] == 0 || search->ax[n] == 3) ? (++search->po[n] > 3) : ((search->po[n] = search->po[n] + 2) > 3)) {
-                do {// increment axis
-                    if (++search->ax[n] > 5) {
-                        if (n == depthPhase1) {
-                            if (depthPhase2 >= maxDepthPhase2)
-                                return -1;
-                            else {
-                                depthPhase2++;
-                                search->ax[n] = 0;
-                                search->po[n] = 1;
-                                busy = 0;
-                                break;
-                            }
-                        } else {
-                            n--;
-                            busy = 1;
-                            break;
-                        }
+        if (search->axis[n] == 0 || search->axis[n] == 3)// Initialize next move
+        {
+          search->axis[++n] = 1;
+          search->power[n] = 2;
+        } else {
+          search->axis[++n] = 0;
+          search->power[n] = 1;
+        }
+      } else if ((search->axis[n] == 0 || search->axis[n] == 3) ? (++search->power[n] > 3) : ((search->power[n] = search->power[n] + 2) > 3)) {
+        do {// increment axis
+          if (++search->axis[n] > 5) {
+            if (n == phase1_depth) {
+              if (phase2_depth >= max_phase2_depth)
+                return -1;
+              else {
+                phase2_depth++;
+                search->axis[n] = 0;
+                search->power[n] = 1;
+                busy = false;
+                break;
+              }
+            } else {
+              n--;
+              busy = true;
+              break;
+            }
 
-                    } else {
-                        if (search->ax[n] == 0 || search->ax[n] == 3)
-                            search->po[n] = 1;
-                        else
-                            search->po[n] = 2;
-                        busy = 0;
-                    }
-                } while (n != depthPhase1 && (search->ax[n - 1] == search->ax[n] || search->ax[n - 1] - 3 == search->ax[n]));
-            } else
-                busy = 0;
-        } while (busy);
+          } else {
+            if (search->axis[n] == 0 || search->axis[n] == 3)
+              search->power[n] = 1;
+            else
+              search->power[n] = 2;
+            busy = false;
+          }
+        } while (n != phase1_depth && (search->axis[n - 1] == search->axis[n] || search->axis[n - 1] - 3 == search->axis[n]));
+      } else
+        busy = false;
+    } while (busy);
 
-        p4 += 1; // number of nodes expanded phase 2
+    p4 += 1; // number of nodes expanded phase 2
 
-        // +++++++++++++ compute new coordinates and new minDist ++++++++++
-        mv = 3 * search->ax[n] + search->po[n] - 1;
+    // +++++++++++++ compute new coordinates and new minDist ++++++++++
+    move = 3 * search->axis[n] + search->power[n] - 1;
 
-        search->URFtoDLF[n + 1] = URFtoDLF_Move[search->URFtoDLF[n]][mv];
-        search->FRtoBR[n + 1] = FRtoBR_Move[search->FRtoBR[n]][mv];
-        search->parity[n + 1] = parityMove[search->parity[n]][mv];
-        search->URtoDF[n + 1] = URtoDF_Move[search->URtoDF[n]][mv];
+    search->corner[n + 1] = MOVE_CORNER[search->corner[n]][move];
+    search->slice2[n + 1] = MOVE_SLICE[search->slice2[n]][move];
+    search->parity[n + 1] = MOVE_PARITY[search->parity[n]][move];
+    search->edgeUD[n + 1] = MOVE_EDGE_UD[search->edgeUD[n]][move];
 
-        search->minDistPhase2[n + 1] = MAX(getPruning(Slice_URtoDF_Parity_Prun, (N_SLICE2
-                * search->URtoDF[n + 1] + search->FRtoBR[n + 1])
-                * 2 + search->parity[n + 1]), getPruning(Slice_URFtoDLF_Parity_Prun, (N_SLICE2
-                * search->URFtoDLF[n + 1] + search->FRtoBR[n + 1])
-                * 2 + search->parity[n + 1]));
-        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    search->min_phase2_dist[n + 1] = MAX(getPruning(PRUNE_EDGE, (N_SLICE2
+        * search->edgeUD[n + 1] + search->slice2[n + 1])
+        * 2 + search->parity[n + 1]), getPruning(PRUNE_CORNER, (N_SLICE2
+        * search->corner[n + 1] + search->slice2[n + 1])
+        * 2 + search->parity[n + 1]));
+    // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-    } while (search->minDistPhase2[n + 1] != 0);
+  } while (search->min_phase2_dist[n + 1] != 0);
 
-    p5 += 1; // number of phase 2 solutions found
+  p5 += 1; // number of phase 2 solutions found
 
-    return depthPhase1 + depthPhase2;
+  return phase1_depth + phase2_depth;
 }
 
-void patternize(char* facelets, char* pattern, char* patternized)
-{
-    facecube_t* fc;
-    facecube_t* start_fc = get_facecube_fromstring(facelets);
-    facecube_t* pattern_fc = get_facecube_fromstring(pattern);
-    cubiecube_t* start_cc = toCubieCube(start_fc);
-    cubiecube_t* pattern_cc = toCubieCube(pattern_fc);
-    cubiecube_t* inv_pattern_cc = get_cubiecube();
-    invCubieCube(pattern_cc, inv_pattern_cc);
-    multiply(inv_pattern_cc, start_cc);
-    fc = toFaceCube(inv_pattern_cc);
-    to_String(fc, patternized);
-    free(start_fc);
-    free(pattern_fc);
-    free(start_cc);
-    free(pattern_cc);
-    free(inv_pattern_cc);
-    free(fc);
+static void solution_to_string(search_t* search, int length, int phase1_depth, char *solution) {
+  int i;
+
+  for (i = 0; i < length; i++) {
+    switch (search->axis[i]) {
+
+    case 0: *solution++ = 'U'; break;
+    case 1: *solution++ = 'R'; break;
+    case 2: *solution++ = 'F'; break;
+    case 3: *solution++ = 'D'; break;
+    case 4: *solution++ = 'L'; break;
+    case 5: *solution++ = 'B'; break;
+
+    }
+
+    switch (search->power[i]) {
+
+    case 1:          break;
+    case 2: *solution++ = '2';  break;
+    case 3: *solution++ = '\''; break;
+
+    }
+
+    *solution++ = ' ';
+
+    if (i == phase1_depth - 1) {
+      *solution++ = '.';
+      *solution++ = ' ';
+    }
+  }
+
+  *solution++ = '\0';
 }

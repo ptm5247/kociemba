@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,19 +10,45 @@ extern uint64_t p1, p2, p3, p4, p5;
 uint64_t p6 = 0, p7 = 0;
 
 #define SOLUTIONS         10000
-#define SOLUTION_BUFFSIZ  256
 
 int main(int argc, char **argv) {
-  int    solutions = 0;
-  char   line_buf[SOLUTION_BUFFSIZ] = { 0 };
-  char  *sol_buf;
-  size_t sol_len;
-  int    i;
+  int       solutions = 0;
+  char      line_buf[SOLUTION_BUFSIZ];
+  char      sol_buf[SOLUTION_BUFSIZ];
+  size_t    sol_len;
+  options_t options = DEFAULT_OPTIONS;
+  int       argn, i;
+
+  for (argn = 1; argn < argc; argn++) {
+#define arg_match(lit) !strncmp(argv[argn], lit, sizeof(lit) - 1)
+#define arg_get(lit)   (arg_match(lit) && argn++)
+#define arg_geteq(lit) (arg_match(lit) && (argv[argn] += sizeof(lit) - 1))
+
+    if (arg_get("-d") || arg_geteq("--depth=")) {
+      options.max_depth = atoi(argv[argn]);
+    }
+
+    else if (arg_get("-t") || arg_geteq("--time=")) {
+      options.timeout_sec = atoi(argv[argn]);
+    }
+
+    else if (arg_match("-s")) {
+      options.use_separator = true;
+    }
+
+    else if (arg_get("-c") || arg_geteq("--cache=")) {
+      options.cache_dir = argv[argn];
+    }
+
+    else {
+      fprintf(stderr, "Unknown argument %s\n", argv[argn]);
+      exit(EXIT_FAILURE);
+    }
+  }
 
   while (++solutions < SOLUTIONS) {
     if (!fgets(line_buf, sizeof(line_buf), stdin)) break;
-    sol_buf = solution(line_buf, 24, 1000, 0, "cache");
-    if (!sol_buf) {
+    if (!solution(line_buf, &options, sol_buf)) {
       printf("%d: %s\n", solutions, line_buf);
       exit(EXIT_FAILURE);
     }
@@ -34,7 +61,6 @@ int main(int argc, char **argv) {
     }
 
     if (!fgets(line_buf, sizeof(line_buf), stdin)) break;
-    free(sol_buf);
     if (solutions % (SOLUTIONS / 100) == 0) {
       printf("\rProgress: %3d%%", solutions / (SOLUTIONS / 100));
       fflush(stdout);
