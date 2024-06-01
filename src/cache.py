@@ -373,30 +373,19 @@ def write_cache() -> None:
     0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
   ])
 
-  def get_prune(table: array, index: int) -> int:
-    if index & 1:
-      return (table[index // 2] >> 4) & 0x0F
-    else:
-      return (table[index // 2] >> 0) & 0x0F
-
-  def set_prune(table: array, index: int, value: int) -> None:
-    if index & 1:
-      table[index // 2] &= 0x0F | (value << 4)
-    else:
-      table[index // 2] &= 0xF0 | (value << 0)
-
   depth, done = 0, 1
-  prune_table = array('B', (0xFF for _ in range((N_SLICE1 * N_TWIST) // 2 + 1)))
-  set_prune(prune_table, 0, 0)
+  prune_table = array('B', (0xFF for _ in range(512 * N_TWIST)))
+  prune_table[0] = 0
   while done != N_SLICE1 * N_TWIST:
     for i in range(N_SLICE1 * N_TWIST):
       twist1, slice1 = divmod(i, N_SLICE1)
-      if get_prune(prune_table, i) == depth:
+      k = 512 * twist1 + slice1
+      if prune_table[k] == depth:
         for j in range(N_MOVES * 3):
           twist2 = twist[twist1 * N_MOVES * 3 + j]
           slice2 = slice[slice1 * N_SLICE2 * N_MOVES * 3 + j] // N_SLICE2
-          if get_prune(prune_table, N_SLICE1 * twist2 + slice2) == 0x0F:
-            set_prune(prune_table, N_SLICE1 * twist2 + slice2, depth + 1)
+          if prune_table[512 * twist2 + slice2] == 0xFF:
+            prune_table[512 * twist2 + slice2] = depth + 1
             done += 1
             if not done & 127:
               print(f'prune/twist: {done}/{N_SLICE1 * N_TWIST}', end='\r')
@@ -406,17 +395,18 @@ def write_cache() -> None:
     prune_table.tofile(file)
 
   depth, done = 0, 1
-  prune_table = array('B', (0xFF for _ in range((N_SLICE1 * N_FLIP) // 2)))
-  set_prune(prune_table, 0, 0)
+  prune_table = array('B', (0xFF for _ in range(512 * N_FLIP)))
+  prune_table[0] = 0
   while done != N_SLICE1 * N_FLIP:
     for i in range(N_SLICE1 * N_FLIP):
       flip1, slice1 = divmod(i, N_SLICE1)
-      if get_prune(prune_table, i) == depth:
+      k = 512 * flip1 + slice1
+      if prune_table[k] == depth:
         for j in range(N_MOVES * 3):
           flip2 = flip[flip1 * N_MOVES * 3 + j]
           slice2 = slice[slice1 * N_SLICE2 * N_MOVES * 3 + j] // N_SLICE2
-          if get_prune(prune_table, N_SLICE1 * flip2 + slice2) == 0x0F:
-            set_prune(prune_table, N_SLICE1 * flip2 + slice2, depth + 1)
+          if prune_table[512 * flip2 + slice2] == 0xFF:
+            prune_table[512 * flip2 + slice2] = depth + 1
             done += 1
             if not done & 127:
               print(f'prune/flip: {done}/{N_SLICE1 * N_FLIP}', end='\r')
@@ -426,19 +416,20 @@ def write_cache() -> None:
     prune_table.tofile(file)
 
   depth, done = 0, 1
-  prune_table = array('B', (0xFF for _ in range((N_SLICE2 * N_CORNER * N_PARITY) // 2)))
-  set_prune(prune_table, 0, 0)
+  prune_table = array('B', (0xFF for _ in range(32 * N_CORNER * N_PARITY)))
+  prune_table[0] = 0
   while done != N_SLICE2 * N_CORNER * N_PARITY:
     for i in range(N_SLICE2 * N_CORNER * N_PARITY):
       parity1 = i % 2
       corner1, slice1 = divmod(i // 2, N_SLICE2)
-      if get_prune(prune_table, i) == depth:
+      k = (32 * corner1 + slice1) * 2 + parity1
+      if prune_table[k] == depth:
         for j in [0, 1, 2, 4, 7, 9, 10, 11, 13, 16]:
           parity2 = parity[parity1 * N_MOVES * 3 + j]
           corner2 = corner[corner1 * N_MOVES * 3 + j]
           slice2  = slice[slice1  * N_MOVES * 3 + j]
-          if get_prune(prune_table, (N_SLICE2 * corner2 + slice2) * N_PARITY + parity2) == 0x0F:
-            set_prune(prune_table, (N_SLICE2 * corner2 + slice2) * N_PARITY + parity2, depth + 1)
+          if prune_table[(32 * corner2 + slice2) * N_PARITY + parity2] == 0xFF:
+            prune_table[(32 * corner2 + slice2) * N_PARITY + parity2] = depth + 1
             done += 1
             if not done & 127:
               print(f'prune/corner: {done}/{N_SLICE2 * N_CORNER * N_PARITY}', end='\r')
@@ -448,19 +439,20 @@ def write_cache() -> None:
     prune_table.tofile(file)
 
   depth, done = 0, 1
-  prune_table = array('B', (0xFF for _ in range((N_SLICE2 * N_EDGEUD * N_PARITY) // 2)))
-  set_prune(prune_table, 0, 0)
+  prune_table = array('B', (0xFF for _ in range(32 * N_EDGEUD * N_PARITY)))
+  prune_table[0] = 0
   while done != N_SLICE2 * N_EDGEUD * N_PARITY:
     for i in range(N_SLICE2 * N_EDGEUD * N_PARITY):
       parity1 = i % 2
       edge1, slice1 = divmod(i // 2, N_SLICE2)
-      if get_prune(prune_table, i) == depth:
+      k = (32 * edge1 + slice1) * 2 + parity1
+      if prune_table[k] == depth:
         for j in [0, 1, 2, 4, 7, 9, 10, 11, 13, 16]:
           parity2 =  parity[parity1 * N_MOVES * 3 + j]
           edge2   = edgeUD[edge1   * N_MOVES * 3 + j]
           slice2  =  slice[slice1  * N_MOVES * 3 + j]
-          if get_prune(prune_table, (N_SLICE2 * edge2 + slice2) * N_PARITY + parity2) == 0x0F:
-            set_prune(prune_table, (N_SLICE2 * edge2 + slice2) * N_PARITY + parity2, depth + 1)
+          if prune_table[(32 * edge2 + slice2) * N_PARITY + parity2] == 0xFF:
+            prune_table[(32 * edge2 + slice2) * N_PARITY + parity2] = depth + 1
             done += 1
             if not done & 127:
               print(f'prune/edge: {done}/{N_SLICE2 * N_EDGEUD * N_PARITY}', end='\r')

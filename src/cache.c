@@ -7,22 +7,23 @@
 
 #include "cache.h"
 
-short MOVE_TWIST[N_TWIST][N_MOVE];
-short MOVE_FLIP[N_FLIP][N_MOVE];
-short MOVE_PARITY[N_PARITY][N_MOVE] = {
+int16_t MOVE_TWIST[N_TWIST][N_MOVE];
+int16_t MOVE_FLIP[N_FLIP][N_MOVE];
+int16_t MOVE_PARITY[N_PARITY][N_MOVE] = {
   { 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1 },
   { 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0 },
 };
-short MOVE_SLICE[N_FRtoBR][N_MOVE];
-short MOVE_CORNER[N_URFtoDLF][N_MOVE] = {{0}};
-short MOVE_EDGE_UD[N_URtoDF][N_MOVE] = {{0}};
-short MOVE_EDGE_U[N_URtoUL][N_MOVE] = {{0}};
-short MOVE_EDGE_D[N_UBtoDF][N_MOVE] = {{0}};
-short MERGE_EDGE_UD[336][336] = {{0}};
-signed char PRUNE_CORNER[N_SLICE2 * N_URFtoDLF * N_PARITY / 2] = {0};
-signed char PRUNE_EDGE[N_SLICE2 * N_URtoDF * N_PARITY / 2] = {0};
-signed char PRUNE_TWIST[N_SLICE1 * N_TWIST / 2 + 1] = {0};
-signed char PRUNE_FLIP[N_SLICE1 * N_FLIP / 2] = {0};
+int16_t MOVE_SLICE1[N_SLICE1][N_MOVE];
+int16_t MOVE_SLICE[N_SLICE][N_MOVE];
+int16_t MOVE_CORNER[N_URFtoDLF][N_MOVE] = {{0}};
+int16_t MOVE_EDGE_UD[N_URtoDF][N_MOVE] = {{0}};
+int16_t MOVE_EDGE_U[N_URtoUL][N_MOVE] = {{0}};
+int16_t MOVE_EDGE_D[N_UBtoDF][N_MOVE] = {{0}};
+int16_t MERGE_EDGE_UD[336][336] = {{0}};
+int8_t PRUNE_CORNER[PRUNE_CORNER_CAPACITY] = {0};
+int8_t PRUNE_EDGE[PRUNE_EDGE_CAPACITY] = {0};
+int8_t PRUNE_TWIST[PRUNE_TWIST_CAPACITY] = {0};
+int8_t PRUNE_FLIP[PRUNE_FLIP_CAPACITY] = {0};
 
 bool CACHE_OK = false;
 
@@ -30,6 +31,7 @@ static void read_table(const char *cache_dir, const char *name, void *ptr, size_
 
 void init_cache(const char *cache_dir) {
   uint64_t cache_size = 0;
+  int      i, j;
 
   read_table(cache_dir, "move/twist",   (void *)MOVE_TWIST,    sizeof(MOVE_TWIST));
   read_table(cache_dir, "move/flip",    (void *)MOVE_FLIP,     sizeof(MOVE_FLIP));
@@ -44,27 +46,19 @@ void init_cache(const char *cache_dir) {
   read_table(cache_dir, "prune/twist",  (void *)PRUNE_TWIST,   sizeof(PRUNE_TWIST));
   read_table(cache_dir, "prune/flip",   (void *)PRUNE_FLIP,    sizeof(PRUNE_FLIP));
 
+  for (i = 0; i < N_SLICE1; i++)
+    for (j = 0; j < N_MOVE; j++)
+      MOVE_SLICE1[i][j] = MOVE_SLICE[i * 24][j] / 24;
+
   cache_size =
     sizeof(MOVE_TWIST) + sizeof(MOVE_FLIP) + sizeof(MOVE_PARITY) +
-    sizeof(MOVE_SLICE) + sizeof(MOVE_CORNER) + sizeof(MOVE_EDGE_UD) +
-    sizeof(MOVE_EDGE_U) + sizeof(MOVE_EDGE_D) + sizeof(MERGE_EDGE_UD) +
-    sizeof(PRUNE_CORNER) + sizeof(PRUNE_EDGE) +
+    sizeof(MOVE_SLICE1) + sizeof(MOVE_SLICE) + sizeof(MOVE_CORNER) +
+    sizeof(MOVE_EDGE_UD) + sizeof(MOVE_EDGE_U) + sizeof(MOVE_EDGE_D) +
+    sizeof(MERGE_EDGE_UD) + sizeof(PRUNE_CORNER) + sizeof(PRUNE_EDGE) +
     sizeof(PRUNE_TWIST) + sizeof(PRUNE_FLIP);
   printf("Cache Size: %ld\n", cache_size);
 
   CACHE_OK = true;
-}
-
-// Extract pruning value
-signed char getPruning(signed char *table, int index) {
-  signed char res;
-
-  if ((index & 1) == 0)
-    res = (table[index / 2] & 0x0f);
-  else
-    res = ((table[index / 2] >> 4) & 0x0f);
-
-  return res;
 }
 
 #define MAX_PATH_LENGTH 512

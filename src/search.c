@@ -107,10 +107,10 @@ bool solution(const char *cubestring, options_t *options, char* solution) {
 
     search.flip[n + 1] = MOVE_FLIP[search.flip[n]][move];
     search.twist[n + 1] = MOVE_TWIST[search.twist[n]][move];
-    search.slice1[n + 1] = MOVE_SLICE[search.slice1[n] * 24][move] / 24;
+    search.slice1[n + 1] = MOVE_SLICE1[search.slice1[n]][move];
 
-    pruneA = getPruning(PRUNE_FLIP, N_SLICE1 * search.flip[n + 1] + search.slice1[n + 1]);
-    pruneB = getPruning(PRUNE_TWIST, N_SLICE1 * search.twist[n + 1] + search.slice1[n + 1]);
+    pruneA = PRUNE_FLIP[512 * search.flip[n + 1] + search.slice1[n + 1]];
+    pruneB = PRUNE_TWIST[512 * search.twist[n + 1] + search.slice1[n + 1]];
     search.min_phase1_dist[n + 1] = MAX(pruneA, pruneB);
 
     // -------------------------------------------------------------------------
@@ -151,7 +151,7 @@ static int totalDepth(search_t* search, int phase1_depth, int max_depth) {
     search->parity[i + 1] = MOVE_PARITY[search->parity[i]][move];
   }
 
-  pruneA = getPruning(PRUNE_CORNER, (N_SLICE2 * search->corner[phase1_depth] + search->slice2[phase1_depth]) * 2 + search->parity[phase1_depth]);
+  pruneA = PRUNE_CORNER[2 * (32 * search->corner[phase1_depth] + search->slice2[phase1_depth]) + search->parity[phase1_depth]];
   if (pruneA > max_phase2_depth) return -1;
 
   for (i = 0; i < phase1_depth; i++) {
@@ -161,7 +161,7 @@ static int totalDepth(search_t* search, int phase1_depth, int max_depth) {
   }
   search->edgeUD[phase1_depth] = MERGE_EDGE_UD[search->edgeU[phase1_depth]][search->edgeD[phase1_depth]];
 
-  pruneB = getPruning(PRUNE_EDGE, (N_SLICE2 * search->edgeUD[phase1_depth] + search->slice2[phase1_depth]) * 2 + search->parity[phase1_depth]);
+  pruneB = PRUNE_EDGE[2 * (32 * search->edgeUD[phase1_depth] + search->slice2[phase1_depth]) + search->parity[phase1_depth]];
   if (pruneB > max_phase2_depth) return -1;
 
   if ((search->min_phase2_dist[phase1_depth] = MAX(pruneA, pruneB)) == 0) // already solved
@@ -233,8 +233,8 @@ static int totalDepth(search_t* search, int phase1_depth, int max_depth) {
     search->parity[n + 1] = MOVE_PARITY[search->parity[n]][move];
     search->edgeUD[n + 1] = MOVE_EDGE_UD[search->edgeUD[n]][move];
 
-    pruneA = getPruning(PRUNE_EDGE, (N_SLICE2 * search->edgeUD[n + 1] + search->slice2[n + 1]) * 2 + search->parity[n + 1]);
-    pruneB = getPruning(PRUNE_CORNER, (N_SLICE2 * search->corner[n + 1] + search->slice2[n + 1]) * 2 + search->parity[n + 1]);
+    pruneA = PRUNE_EDGE[2 * (32 * search->edgeUD[n + 1] + search->slice2[n + 1]) + search->parity[n + 1]];
+    pruneB = PRUNE_CORNER[2 * (32 * search->corner[n + 1] + search->slice2[n + 1]) + search->parity[n + 1]];
     search->min_phase2_dist[n + 1] = MAX(pruneA, pruneB);
 
     // -------------------------------------------------------------------------

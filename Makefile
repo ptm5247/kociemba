@@ -12,7 +12,7 @@ PYTHON = python3
 TEST = test
 TEST_INPUT = javares.txt
 
-VERSION = 0.2
+VERSION = 0.3
 
 $(CACHEDIR): $(SRCDIR)/cache.py
 	@echo Rewriting Cache...
