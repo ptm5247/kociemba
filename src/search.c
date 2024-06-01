@@ -24,6 +24,7 @@ bool solution(const char *cubestring, options_t *options, char* solution) {
   int     move, n;
   bool    busy;
   time_t  start_time;
+  int8_t  pruneA, pruneB;
 
   // ------------------------------- validation --------------------------------
 
@@ -99,17 +100,21 @@ bool solution(const char *cubestring, options_t *options, char* solution) {
 
     p1 += 1; // number of nodes expanded in phase 1
 
-    // +++++++++++++ compute new coordinates and new min_phase1_dist ++++++++++
-    // if min_phase1_dist =0, the H subgroup is reached
+    // ------------ compute new coordinates and new min_phase1_dist ------------
+    // if min_phase1_dist=0, the H subgroup is reached
+
     move = 3 * search.axis[n] + search.power[n] - 1;
+
     search.flip[n + 1] = MOVE_FLIP[search.flip[n]][move];
     search.twist[n + 1] = MOVE_TWIST[search.twist[n]][move];
     search.slice1[n + 1] = MOVE_SLICE[search.slice1[n] * 24][move] / 24;
-    search.min_phase1_dist[n + 1] = MAX(
-      getPruning(PRUNE_FLIP, N_SLICE1 * search.flip[n + 1] + search.slice1[n + 1]),
-      getPruning(PRUNE_TWIST, N_SLICE1 * search.twist[n + 1] + search.slice1[n + 1])
-    );
-    // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+    pruneA = getPruning(PRUNE_FLIP, N_SLICE1 * search.flip[n + 1] + search.slice1[n + 1]);
+    pruneB = getPruning(PRUNE_TWIST, N_SLICE1 * search.twist[n + 1] + search.slice1[n + 1]);
+    search.min_phase1_dist[n + 1] = MAX(pruneA, pruneB);
+
+    // -------------------------------------------------------------------------
+
     if (search.min_phase1_dist[n + 1] == 0 && n >= phase1_depth - 5) {
 
       p2 += 1; // number of phase 1 solutions found
@@ -132,11 +137,12 @@ bool solution(const char *cubestring, options_t *options, char* solution) {
 }
 
 static int totalDepth(search_t* search, int phase1_depth, int max_depth) {
-  int move = 0, d1 = 0, d2 = 0, i;
+  int move = 0, i;
   int max_phase2_depth = MIN(10, max_depth - phase1_depth);// Allow only max 10 moves in phase2
   int phase2_depth;
   int n;
   bool busy;
+  int8_t pruneA, pruneB;
 
   for (i = 0; i < phase1_depth; i++) {
     move = 3 * search->axis[i] + search->power[i] - 1;
@@ -145,9 +151,8 @@ static int totalDepth(search_t* search, int phase1_depth, int max_depth) {
     search->parity[i + 1] = MOVE_PARITY[search->parity[i]][move];
   }
 
-  if ((d1 = getPruning(PRUNE_CORNER,
-      (N_SLICE2 * search->corner[phase1_depth] + search->slice2[phase1_depth]) * 2 + search->parity[phase1_depth])) > max_phase2_depth)
-    return -1;
+  pruneA = getPruning(PRUNE_CORNER, (N_SLICE2 * search->corner[phase1_depth] + search->slice2[phase1_depth]) * 2 + search->parity[phase1_depth]);
+  if (pruneA > max_phase2_depth) return -1;
 
   for (i = 0; i < phase1_depth; i++) {
     move = 3 * search->axis[i] + search->power[i] - 1;
@@ -156,11 +161,10 @@ static int totalDepth(search_t* search, int phase1_depth, int max_depth) {
   }
   search->edgeUD[phase1_depth] = MERGE_EDGE_UD[search->edgeU[phase1_depth]][search->edgeD[phase1_depth]];
 
-  if ((d2 = getPruning(PRUNE_EDGE,
-      (N_SLICE2 * search->edgeUD[phase1_depth] + search->slice2[phase1_depth]) * 2 + search->parity[phase1_depth])) > max_phase2_depth)
-    return -1;
+  pruneB = getPruning(PRUNE_EDGE, (N_SLICE2 * search->edgeUD[phase1_depth] + search->slice2[phase1_depth]) * 2 + search->parity[phase1_depth]);
+  if (pruneB > max_phase2_depth) return -1;
 
-  if ((search->min_phase2_dist[phase1_depth] = MAX(d1, d2)) == 0)// already solved
+  if ((search->min_phase2_dist[phase1_depth] = MAX(pruneA, pruneB)) == 0) // already solved
     return phase1_depth;
 
   p3 += 1; // number of phase 2 trees explored (prune value <= 10)
@@ -219,7 +223,9 @@ static int totalDepth(search_t* search, int phase1_depth, int max_depth) {
 
     p4 += 1; // number of nodes expanded phase 2
 
-    // +++++++++++++ compute new coordinates and new minDist ++++++++++
+    // ------------ compute new coordinates and new min_phase2_dist ------------
+    // if min_phase2_dist=0, the solution is reached
+
     move = 3 * search->axis[n] + search->power[n] - 1;
 
     search->corner[n + 1] = MOVE_CORNER[search->corner[n]][move];
@@ -227,12 +233,11 @@ static int totalDepth(search_t* search, int phase1_depth, int max_depth) {
     search->parity[n + 1] = MOVE_PARITY[search->parity[n]][move];
     search->edgeUD[n + 1] = MOVE_EDGE_UD[search->edgeUD[n]][move];
 
-    search->min_phase2_dist[n + 1] = MAX(getPruning(PRUNE_EDGE, (N_SLICE2
-        * search->edgeUD[n + 1] + search->slice2[n + 1])
-        * 2 + search->parity[n + 1]), getPruning(PRUNE_CORNER, (N_SLICE2
-        * search->corner[n + 1] + search->slice2[n + 1])
-        * 2 + search->parity[n + 1]));
-    // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    pruneA = getPruning(PRUNE_EDGE, (N_SLICE2 * search->edgeUD[n + 1] + search->slice2[n + 1]) * 2 + search->parity[n + 1]);
+    pruneB = getPruning(PRUNE_CORNER, (N_SLICE2 * search->corner[n + 1] + search->slice2[n + 1]) * 2 + search->parity[n + 1]);
+    search->min_phase2_dist[n + 1] = MAX(pruneA, pruneB);
+
+    // -------------------------------------------------------------------------
 
   } while (search->min_phase2_dist[n + 1] != 0);
 

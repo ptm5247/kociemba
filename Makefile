@@ -5,14 +5,14 @@ INCLUDEDIR = include
 CACHEDIR = cache
 
 CC = gcc
-CFLAGS = -O3 -Wunused-function
+CFLAGS = -O3 -msse2 -fopt-info-vec-optimized -march=native
 
 PYTHON = python3
 
 TEST = test
 TEST_INPUT = javares.txt
 
-VERSION = 0.1
+VERSION = 0.2
 
 $(CACHEDIR): $(SRCDIR)/cache.py
 	@echo Rewriting Cache...
@@ -23,7 +23,7 @@ $(CACHEDIR): $(SRCDIR)/cache.py
 
 $(BINDIR)/$(TEST): $(TESTDIR)/test.c $(SRCDIR)/*.c $(INCLUDEDIR)/*.h
 	@mkdir -p $(BINDIR) $(CACHEDIR)
-	@$(CC) $(CFLAGS) -o $@ $(TESTDIR)/test.c $(SRCDIR)/*.c -I$(INCLUDEDIR)
+	@$(CC) $(CFLAGS) -o $@ $(TESTDIR)/test.c $(SRCDIR)/*.c -I$(INCLUDEDIR) 2> $(BINDIR)/optimize
 
 test: $(BINDIR)/$(TEST) $(CACHEDIR) FORCE
 	@echo Version $(VERSION)
