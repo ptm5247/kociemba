@@ -5,14 +5,14 @@ INCLUDEDIR = include
 CACHEDIR = cache
 
 CC = gcc
-CFLAGS = -O3 -msse2 -fopt-info-vec-optimized -march=native
+CFLAGS = -Ofast -march=native -msse2 -fopt-info-vec-optimized
 
 PYTHON = python3
 
 TEST = test
 TEST_INPUT = javares.txt
 
-VERSION = 0.3
+VERSION = 0.4
 
 $(CACHEDIR): $(SRCDIR)/cache.py
 	@echo Rewriting Cache...

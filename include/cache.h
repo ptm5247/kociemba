@@ -8,13 +8,11 @@
 #define N_SLICE1    495
 #define N_SLICE2    24
 #define N_PARITY    2
-#define N_URFtoDLF  20160
+#define N_CORNER    20160
 #define N_SLICE     11880
-#define N_URtoUL    1320
-#define N_UBtoDF    1320
-#define N_URtoDF    20160
-#define N_URFtoDLB  40320
-#define N_URtoBR    479001600
+#define N_EDGE_U    1320
+#define N_EDGE_D    1320
+#define N_EDGE_UD   20160
 #define N_MOVE      18
 
 // ******************************************Phase 1 move tables*****************************************************
@@ -46,22 +44,22 @@ extern int16_t MOVE_SLICE[N_SLICE][N_MOVE];
 // corner < 20160 in phase 1
 // corner < 20160 in phase 2
 // corner = 0 for solved cube.
-extern int16_t MOVE_CORNER[N_URFtoDLF][N_MOVE];
+extern int16_t MOVE_CORNER[N_CORNER][N_MOVE];
 
 // Move table for the permutation of six U-face and D-face edges in phase2. The positions of the DL and DB edges are
 // determined by the parity.
 // edgeUD < 665280 in phase 1
 // edgeUD < 20160 in phase 2
 // edgeUD = 0 for solved cube.
-extern int16_t MOVE_EDGE_UD[N_URtoDF][N_MOVE];
+extern int16_t MOVE_EDGE_UD[N_EDGE_UD][N_MOVE];
 
 // **************************helper move tables to compute edgeUD for the beginning of phase2************************
 
 // Move table for the three edges UR,UF and UL in phase1.
-extern int16_t MOVE_EDGE_U[N_URtoUL][N_MOVE];
+extern int16_t MOVE_EDGE_U[N_EDGE_U][N_MOVE];
 
 // Move table for the three edges UB,DR and DF in phase1.
-extern int16_t MOVE_EDGE_D[N_UBtoDF][N_MOVE];
+extern int16_t MOVE_EDGE_D[N_EDGE_D][N_MOVE];
 
 // Table to merge the coordinates of the UR,UF,UL and UB,DR,DF edges at the beginning of phase2
 extern int16_t MERGE_EDGE_UD[336][336];
@@ -70,12 +68,12 @@ extern int16_t MERGE_EDGE_UD[336][336];
 
 // Pruning table for the permutation of the corners and the UD-slice1 edges in phase2.
 // The pruning table entries give a lower estimation for the number of moves to reach the solved cube.
-#define PRUNE_CORNER_CAPACITY (32 * N_URFtoDLF * N_PARITY)
+#define PRUNE_CORNER_CAPACITY (32 * N_CORNER * N_PARITY)
 extern int8_t PRUNE_CORNER[PRUNE_CORNER_CAPACITY];
 
 // Pruning table for the permutation of the edges in phase2.
 // The pruning table entries give a lower estimation for the number of moves to reach the solved cube.
-#define PRUNE_EDGE_CAPACITY (32 * N_URtoDF * N_PARITY)
+#define PRUNE_EDGE_CAPACITY (32 * N_EDGE_UD * N_PARITY)
 extern int8_t PRUNE_EDGE[PRUNE_EDGE_CAPACITY];
 
 // Pruning table for the twist of the corners and the position (not permutation) of the UD-slice1 edges in phase1
