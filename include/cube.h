@@ -6,7 +6,7 @@
 #define FACE_COUNT    6
 typedef enum face {
 
-  U, R, F, D, L, B,
+  U, R, F, D, L, B, E, M, S,
 
 } face_t;
 
@@ -42,7 +42,7 @@ typedef enum edge {
 } edge_t;
 
 #define MAX_PIECES    EDGE_COUNT
-#define MOVE_COUNT    6
+#define MOVE_COUNT    7
 typedef struct cube {
 
   uint8_t   piece_count;

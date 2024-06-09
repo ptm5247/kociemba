@@ -8,40 +8,40 @@ uint8_t CORNER_PERMUTATION_TABLE[][MAX_PIECES] = {
   { UFL, DLF, ULB, UBR, URF, DFR, DBL, DRB, }, // F
   { URF, UFL, ULB, UBR, DLF, DBL, DRB, DFR, }, // D
   { URF, ULB, DBL, UBR, DFR, UFL, DLF, DRB, }, // L
-  { URF, UFL, UBR, DRB, DFR, DLF, ULB, DBL, }, // B
+  // { URF, UFL, UBR, DRB, DFR, DLF, ULB, DBL, }, // B
   { UBR, URF, UFL, ULB, DLF, DBL, DRB, DFR, }, // E
   { DFR, ULB, DBL, URF, DRB, UFL, DLF, UBR, }, // M
-  { UFL, DLF, UBR, DRB, URF, DFR, ULB, DBL, }, // S
+  // { UFL, DLF, UBR, DRB, URF, DFR, ULB, DBL, }, // S
 }, CORNER_ORIENTATION_TABLE[][MAX_PIECES] = {
   {   0,   0,   0,   0,   0,   0,   0,   0, }, // U
   {   2,   0,   0,   1,   1,   0,   0,   2, }, // R
   {   1,   2,   0,   0,   2,   1,   0,   0, }, // F
   {   0,   0,   0,   0,   0,   0,   0,   0, }, // D
   {   0,   1,   2,   0,   0,   2,   1,   0, }, // L
-  {   0,   0,   1,   2,   0,   0,   2,   1, }, // B
+  // {   0,   0,   1,   2,   0,   0,   2,   1, }, // B
   {   0,   0,   0,   0,   0,   0,   0,   0, }, // E
   {   2,   1,   2,   1,   1,   2,   1,   2, }, // M
-  {   1,   2,   1,   2,   2,   1,   2,   1, }, // S
+  // {   1,   2,   1,   2,   2,   1,   2,   1, }, // S
 }, EDGE_PERMUTATION_TABLE[][MAX_PIECES] = {
   { UB, UR, UF, UL, DR, DF, DL, DB, FR, FL, BL, BR, }, // U
   { FR, UF, UL, UB, BR, DF, DL, DB, DR, FL, BL, UR, }, // R
   { UR, FL, UL, UB, DR, FR, DL, DB, UF, DF, BL, BR, }, // F
   { UR, UF, UL, UB, DF, DL, DB, DR, FR, FL, BL, BR, }, // D
   { UR, UF, BL, UB, DR, DF, FL, DB, FR, UL, DL, BR, }, // L
-  { UR, UF, UL, BR, DR, DF, DL, BL, FR, FL, UB, DB, }, // B
+  // { UR, UF, UL, BR, DR, DF, DL, BL, FR, FL, UB, DB, }, // B
   { UB, UR, UF, UL, DF, DL, DB, DR, FR, FL, BL, BR, }, // E
   { FR, UF, BL, UB, BR, DF, FL, DB, DR, UL, DL, UR, }, // M
-  { UR, FL, UL, BR, DR, FR, DL, BL, UF, DF, UB, DB, }, // S
+  // { UR, FL, UL, BR, DR, FR, DL, BL, UF, DF, UB, DB, }, // S
 }, EDGE_ORIENTATION_TABLE[][MAX_PIECES] = {
   {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, }, // U
   {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, }, // R
   {  0,  1,  0,  0,  0,  1,  0,  0,  1,  1,  0,  0, }, // F
   {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, }, // D
   {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, }, // L
-  {  0,  0,  0,  1,  0,  0,  0,  1,  0,  0,  1,  1, }, // B
+  // {  0,  0,  0,  1,  0,  0,  0,  1,  0,  0,  1,  1, }, // B
   {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, }, // E
   {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, }, // M
-  {  0,  1,  0,  1,  0,  1,  0,  1,  1,  1,  1,  1, }, // S
+  // {  0,  1,  0,  1,  0,  1,  0,  1,  1,  1,  1,  1, }, // S
 };
 
 static int choose(int n, int k) {

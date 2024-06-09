@@ -75,6 +75,7 @@ static void write_h_table_phase1(const char *name, int min, int max) {
         flip1 = k % N_FLIP;
         twist1 = k / N_FLIP;
         for (j = min; j < max; j++) {
+          if (j % 3 == 1) continue; // Skip X2
           twist2 = MOVE_TWIST[twist1     ][j];
           flip2  =  MOVE_FLIP[flip1      ][j];
           slice2 = MOVE_SLICE[slice1 * 24][j] / 24;
@@ -109,7 +110,8 @@ static void write_h_table_phase1(const char *name, int min, int max) {
 }
 
 static void write_h_table_phase2(const char *name, int min, int max) {
-  uint8_t  *table = malloc(N_PHASE2 * 5 / 8);
+  uint8_t  *table = malloc(N_PHASE2 / 2);
+  uint64_t *table2 = malloc(100 * sizeof(uint64_t));
   uint64_t  i, j, k;
   int       depth;
   uint64_t  done, last_done;
@@ -120,36 +122,44 @@ static void write_h_table_phase2(const char *name, int min, int max) {
   int       result;
   char      path[MAX_PATH_LENGTH] = { '\0' };
   FILE     *file;
+  FILE     *file2;
+  bool      reset = false;
 
   table_setup
 
+  result = snprintf(path,
+    sizeof(path), TABLE_DIR"/"HEURISTIC_DIR"/%s-2u", name);
+  if (result >= sizeof(path)) {
+    fprintf(stderr,
+      "table path ("TABLE_DIR"/"HEURISTIC_DIR"/%s-2u) is too long\n", name);
+    exit(EXIT_FAILURE);
+  }
+
+  if (!table2) {
+    perror("failed to allocate");
+    exit(EXIT_FAILURE);
+  }
+
+  file2 = fopen(path, "wb");
+  if (!file2) {
+    perror("failed to open");
+    exit(EXIT_FAILURE);
+  }
+
   depth = 0;
-  memset(table, 0xFF, N_PHASE2 * 5 / 8);
-  table[0] = 0b00000111;
+  memset(table, 0xFF, N_PHASE2 / 2);
+  table[0] = 0x0F;
   last_done = 0;
   done = 1;
 
   printf("%s:\n", path);
   printf("  DEPTH |   DONE (THIS PASS)   |      DONE (TOTAL)\n");
 
-#define get_table(table, i) \
-  ((i * 5 % 8) < 4 ? ( \
-    (table[i * 5 / 8] >> (3 - i * 5 % 8)) & 0b11111 \
-  ) : ( \
-    ((table[i * 5 / 8] & (1 << 8 - i * 5 % 8) - 1) << i * 5 % 8 - 3) | \
-    (table[i * 5 / 8 + 1] >> 11 - i * 5 % 8) \
-  ))
+#define get_table(table, i) ((table[i / 2] >> ((i & 1) ? 0 : 4)) & 0b1111)
 
 #define set_table(table, i, value) \
-  if (i * 5 % 8 < 4) { \
-    table[i * 5 / 8] &= ~(0b11111 << 3 - i * 5 % 8); \
-    table[i * 5 / 8] |=  ((value) << 3 - i * 5 % 8); \
-  } else { \
-    table[i * 5 / 8]     &= ~((1 << 8 - i * 5 % 8) - 1); \
-    table[i * 5 / 8]     |=  ((value) >> i * 5 % 8 - 3); \
-    table[i * 5 / 8 + 1] &= ~(((1 << i * 5 % 8 - 3) - 1) << 11 - i * 5 % 8); \
-    table[i * 5 / 8 + 1] |=  (((value) & (1 << i * 5 % 8 - 3) - 1) << 11 - i * 5 % 8); \
-  }
+  if (i & 1) table[i / 2] = table[i / 2] & 0xF0 | (value) << 0; \
+  else       table[i / 2] = table[i / 2] & 0x0F | (value) << 4;
 
   while (done < N_PHASE2) {
     print_summary(depth, N_PHASE2, N_PHASE2, "\n");
@@ -164,8 +174,13 @@ static void write_h_table_phase2(const char *name, int min, int max) {
         corner1 = k / N_EDGE_UD;
         for (j = min; j < max; j++) {
           switch (j) {
-          case  3: case  5: case  6: case  8:
-          case 12: case 14: case 15: case 17:
+          case  1:          // U2
+          case  3: case  5: // R
+          case  6: case  8: // F
+          case 10:          // D2
+          case 12: case 14: // L
+          case 16:          // E2
+          case 18: case 20: // M
             continue;
           default:
             corner2 =  MOVE_CORNER[corner1][j];
@@ -173,7 +188,7 @@ static void write_h_table_phase2(const char *name, int min, int max) {
             slice2  =   MOVE_SLICE[slice1 ][j];
             parity2 =  MOVE_PARITY[parity1][j];
             k = N_PARITY * (N_SLICE2 * (N_EDGE_UD * corner2 + edge2) + slice2) + parity2;
-            if (get_table(table, k) == 0b11111) {
+            if (get_table(table, k) == 0b1111) {
               set_table(table, k, depth + 1);
               done += 1;
               if (!(done & 0x7FFFF)) {
@@ -186,10 +201,31 @@ static void write_h_table_phase2(const char *name, int min, int max) {
       }
     }
     depth += 1;
+    if (depth == 2 && !reset) {
+      print_summary(depth, N_PHASE2, N_PHASE2, "\n");
+      k = 0;
+      memset(table2, 0x00, 100 * sizeof(uint64_t));
+      for (i = 0; i < N_PHASE2; i++) {
+        if (get_table(table, i) <= depth) {
+          table2[k++] = i << 2 | get_table(table, i);
+          set_table(table, i, 0);
+        }
+        if (i % (N_PHASE2 / 100) == 0) {
+          print_summary(depth, i, N_PHASE2, "");
+          fflush(stdout);
+        }
+      }
+      printf("\rCondensed %ld %dU entries into a second table%11s\n", k, depth, "");
+      fwrite(table2, 100 * sizeof(uint64_t), 1, file2);
+      fclose(file2);
+      free(table2);
+      depth -= 2;
+      reset = true;
+    }
   }
   print_summary(depth, N_PHASE2, N_PHASE2, "\n");
 
-  fwrite(table, N_PHASE2 * 5 / 8, 1, file);
+  fwrite(table, N_PHASE2 / 2, 1, file);
   fclose(file);
   free(table);
 }
@@ -204,13 +240,13 @@ int main() {
   read_table(TABLE_DIR, MOVE_DIR "/slice",  MOVE_SLICE,   sizeof(MOVE_SLICE)  );
   read_table(TABLE_DIR, MOVE_DIR "/twist",  MOVE_TWIST,   sizeof(MOVE_TWIST)  );
 
-  write_h_table_phase1("phase1",     0, 18);
-  write_h_table_phase1("phase1-noU", 3, 18);
-  write_h_table_phase1("phase1-noB", 0, 15);
+  // write_h_table_phase1("phase1",     0, 18);
+  // write_h_table_phase1("phase1-noU", 3, 18);
+  write_h_table_phase1("phase1-noB", 0, N_MOVE);
 
-  write_h_table_phase2("phase2",     0, 18);
-  write_h_table_phase2("phase2-noU", 3, 18);
-  write_h_table_phase2("phase2-noB", 0, 15);
+  // write_h_table_phase2("phase2",     0, 18);
+  // write_h_table_phase2("phase2-noU", 3, 18);
+  write_h_table_phase2("phase2-noB", 0, N_MOVE);
 
   exit(EXIT_SUCCESS);
 }

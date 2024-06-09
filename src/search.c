@@ -45,8 +45,9 @@ static int16_t  MOVE_PARITY[N_PARITY][N_MOVE] = PARITY_MOVE_TABLE;
 
 static int16_t  MERGE_EDGE_UD[N_MERGE_UD][N_MERGE_UD];
 
-static uint8_t *HEURISTIC_PHASE1;
-static uint8_t *HEURISTIC_PHASE2;
+static uint8_t   *HEURISTIC_PHASE1;
+static uint8_t   *HEURISTIC_PHASE2;
+static uint64_t  *HEURISTIC_PHASE2_2U;
 
 static bool initialize(const char *cubestring, cube_t *corners, cube_t *edges);
 static void cache_tables();
@@ -72,12 +73,7 @@ bool solution(const char *cubestring, char solution[SOLUTION_BUFSIZ]) {
   (long)corner) + (long)edgeUD) + (long)slice2) + (long)parity)
 
 #define phase2_heuristic(i) \
-  ((i * 5 % 8) < 4 ? ( \
-    (HEURISTIC_PHASE2[i * 5 / 8] >> (3 - i * 5 % 8)) & 0b11111 \
-  ) : ( \
-    ((HEURISTIC_PHASE2[i * 5 / 8] & (1 << 8 - i * 5 % 8) - 1) << i * 5 % 8 - 3) | \
-    (HEURISTIC_PHASE2[i * 5 / 8 + 1] >> 11 - i * 5 % 8) \
-  ))
+  ((HEURISTIC_PHASE2[i / 2] >> ((i & 1) ? 0 : 4)) & 0b1111)
 
   // ------------------------------ preparation -------------------------------
 
@@ -104,6 +100,7 @@ bool solution(const char *cubestring, char solution[SOLUTION_BUFSIZ]) {
 
   while (search[depth].flip || search[depth].twist || search[depth].slice1) {
     for (move = 0; move < N_MOVE; move++) {
+      if (move % 3 == 1) continue; // Skip X2
       p1 += 1;
       flip   =  MOVE_FLIP[search[depth].flip       ][move];
       twist  = MOVE_TWIST[search[depth].twist      ][move];
@@ -155,10 +152,11 @@ bool solution(const char *cubestring, char solution[SOLUTION_BUFSIZ]) {
 
   // ----------------------------- phase 2 search -----------------------------
 
-  while (search[depth].edgeUD || search[depth].corner || search[depth].slice2 || search[depth].parity) {
+  while (search[depth].heuristic) {
     for (move = 0; move < N_MOVE; move++) {
-      if (move ==  3 || move ==  5 || move ==  6 || move ==  8 ||
-          move == 12 || move == 14 || move == 15 || move == 17) continue;
+      if (move ==  1 || move == 10 || move == 16 ||
+          move ==  3 || move ==  5 || move ==  6 || move ==  8 ||
+          move == 12 || move == 14 || move == 18 || move == 20) continue;
       p4 += 1;
       edgeUD = MOVE_EDGE_UD[search[depth].edgeUD][move];
       corner =  MOVE_CORNER[search[depth].corner][move];
@@ -183,6 +181,43 @@ bool solution(const char *cubestring, char solution[SOLUTION_BUFSIZ]) {
       return false;
     }
   }
+
+  search[depth].heuristic = 2;
+  while (search[depth].edgeUD || search[depth].corner || search[depth].slice2 || search[depth].parity) {
+    for (move = 0; move < N_MOVE; move++) {
+      if (move ==  1 || move == 10 || move == 16 ||
+          move ==  3 || move ==  5 || move ==  6 || move ==  8 ||
+          move == 12 || move == 14 || move == 18 || move == 20) continue;
+      p4 += 1;
+      edgeUD = MOVE_EDGE_UD[search[depth].edgeUD][move];
+      corner =  MOVE_CORNER[search[depth].corner][move];
+      slice2 =   MOVE_SLICE[search[depth].slice2][move];
+      parity =  MOVE_PARITY[search[depth].parity][move];
+      phase2 = phase2_coordinate(edgeUD, corner, slice2, parity);
+      for (i = 0; i < 100; i++) {
+        if (HEURISTIC_PHASE2_2U[i] >> 2 == phase2) {
+          heuristic = HEURISTIC_PHASE2_2U[i] & 0b11;
+          break;
+        }
+      } if (i == 100) continue;
+      if (heuristic < search[depth].heuristic) {
+        search[depth].axis = move / 3;
+        search[depth].power = move % 3 + 1;
+        depth += 1;
+        search[depth].edgeUD = edgeUD;
+        search[depth].corner = corner;
+        search[depth].slice2 = slice2;
+        search[depth].parity = parity;
+        search[depth].heuristic = heuristic;
+        break;
+      }
+    }
+    if (move == N_MOVE) {
+      printf("no way down\n");
+      return false;
+    }
+  }
+
   p5 += 1;
 
   return to_string(search, depth, solution);
@@ -321,7 +356,8 @@ static void cache_tables() {
   clock_gettime(CLOCK_REALTIME, &now);
   start("Allocating");
   HEURISTIC_PHASE1 = malloc(N_PHASE1 / 4);
-  HEURISTIC_PHASE2 = malloc(N_PHASE2 * 5 / 8);
+  HEURISTIC_PHASE2 = malloc(N_PHASE2 / 2);
+  HEURISTIC_PHASE2_2U = malloc(100 * sizeof(uint64_t));
   finish();
   start("Reading move tables");
   read_table(TABLE_DIR, MOVE_DIR"/flip",   MOVE_FLIP,    sizeof(MOVE_FLIP) );
@@ -334,13 +370,14 @@ static void cache_tables() {
   read_table(TABLE_DIR, MOVE_DIR"/mergeUD", MERGE_EDGE_UD, sizeof(MERGE_EDGE_UD));
   finish();
   start("Reading heuristic tables");
-  read_table(TABLE_DIR, HEURISTIC_DIR"/phase1", HEURISTIC_PHASE1, N_PHASE1 / 4);
-  read_table(TABLE_DIR, HEURISTIC_DIR"/phase2", HEURISTIC_PHASE2, N_PHASE2 * 5 / 8);
+  read_table(TABLE_DIR, HEURISTIC_DIR"/phase1-noB", HEURISTIC_PHASE1, N_PHASE1 / 4);
+  read_table(TABLE_DIR, HEURISTIC_DIR"/phase2-noB", HEURISTIC_PHASE2, N_PHASE2 / 2);
+  read_table(TABLE_DIR, HEURISTIC_DIR"/phase2-noB-2u", HEURISTIC_PHASE2_2U, 100 * sizeof(uint64_t));
   finish();
   start("Caching heuristic tables");
-  for (index = 0; index < N_PHASE1 / 4; index++)
+  for (index = 0; index < N_PHASE1 / 4; index += 64)
     sum += HEURISTIC_PHASE1[index];
-  for (index = 0; index < N_PHASE2 * 5 / 8; index++)
+  for (index = 0; index < N_PHASE2 / 2; index += 64)
     sum += HEURISTIC_PHASE2[index];
   finish();
   printf("%-32s0x%013lX\n", "Cache Sum:", sum);
@@ -348,7 +385,7 @@ static void cache_tables() {
     sizeof(MOVE_FLIP) + sizeof(MOVE_TWIST) + sizeof(MOVE_SLICE) +
     sizeof(MOVE_EDGE_U) + sizeof(MOVE_EDGE_D) + sizeof(MOVE_EDGE_UD) +
     sizeof(MOVE_CORNER) + sizeof(MERGE_EDGE_UD) + sizeof(MOVE_PARITY) +
-    N_PHASE1 / 4 + N_PHASE2 * 5 / 8);
+    N_PHASE1 / 4 + N_PHASE2 / 2 + 100 * sizeof(uint64_t));
 }
 
 static bool to_string(search_frame_t *search, int depth, char *solution) {
@@ -356,12 +393,13 @@ static bool to_string(search_frame_t *search, int depth, char *solution) {
 
   for (i = 0; i < depth; i++) {
     switch (search[i].axis) {
-    case U: *solution++ = 'U'; break;
-    case R: *solution++ = 'R'; break;
-    case F: *solution++ = 'F'; break;
-    case D: *solution++ = 'D'; break;
-    case L: *solution++ = 'L'; break;
-    case B: *solution++ = 'B'; break;
+    case 0: *solution++ = 'U'; break;
+    case 1: *solution++ = 'R'; break;
+    case 2: *solution++ = 'F'; break;
+    case 3: *solution++ = 'D'; break;
+    case 4: *solution++ = 'L'; break;
+    case 5: *solution++ = 'E'; break;
+    case 6: *solution++ = 'M'; break;
     }
     switch (search[i].power) {
     case 1:                     break;
@@ -374,3 +412,14 @@ static bool to_string(search_frame_t *search, int depth, char *solution) {
 
   return true;
 }
+
+// int main(int argc, char **argv) {
+//   char buffer[SOLUTION_BUFSIZ];
+
+//   if (!solution("DRURUFBBDBDFRRLUFDRULLFUURLLDFUDLRFRLBUDLBDLBRFFDBBFUB", buffer))
+//     puts("no solution");
+
+//   puts(buffer);
+
+//   return EXIT_SUCCESS;
+// }

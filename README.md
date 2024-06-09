@@ -202,3 +202,45 @@ number of U moves in solution (HTM):        49290 |      4.93
 |            Memory (B) | 4,368,407 | 7,119,184 | 12,749,393,844 |  +178,985% |  +291,755% |
 | Solution Length (QTM) |     30.41 |     30.41 |          34.57 |    +13.68% |    +13.68% |
 |         U Moves (HTM) |      4.06 |      4.06 |           4.93 |    +20.43% |    +20.43% |
+
+## Version 0.6
+### Changes
+* enable slice moves
+* disable B moves
+* convert phase 1 moves to QTM
+* convert phase 2 U and D moves to QTM
+* split and densify phase 2 heuristic table
+### Goals
+* achieve goal of 5-face solutions
+* reduce average QTM solution length
+* reduce memory requirements
+### Output
+```
+Version 0.6
+Allocating...                   Done in  0.000s
+Reading move tables...          Done in  0.002s
+Reading heuristic tables...     Done in  4.686s
+Caching heuristic tables...     Done in  9.426s
+Cache Sum:                      0x000075925FA00
+Cache Size:                     0x0000266985B72
+Progress: 100%
+                                            TOTAL | PER SOLVE
+number of phase 1 nodes expanded:          741309 |        74
+number of phase 1 solutions found:          10000 |         1
+number of phase 2 trees explored:           10000 |         1
+number of phase 2 nodes expanded:          679647 |        67
+number of phase 2 solutions found:          10000 |      1.00
+number of moves in solution (QTM):         319303 |     31.93
+number of B moves in solution (HTM):            0 |      0.00
+
+0.69user 3.75system 0:14.43elapsed 30%CPU (0avgtext+0avgdata 10071316maxresident)k
+15713680inputs+0outputs (70123major+1962299minor)pagefaults 0swaps
+```
+### Results:
+|                       | Reference |       Previous |        Current | Difference | Cumulative |
+|----------------------:|:---------:|:--------------:|:--------------:|:----------:|:----------:|
+|         Prep Time (s) |      0.00 |          21.37 |          14.11 |    -33.97% |    -33.97% |
+|        Solve Time (s) |     92.65 |           0.29 |           0.32 |    +10.34% |    -99.65% |
+|            Memory (B) | 4,368,407 | 12,749,393,844 | 10,311,195,506 |    -19.12% |  +235,940% |
+| Solution Length (QTM) |     30.41 |          34.57 |          31.93 |     -7.64% |     +5.00% |
+|         U Moves (HTM) |      4.06 |           4.93 |           0.00 |   -100.00% |   -100.00% |

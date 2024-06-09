@@ -10,13 +10,13 @@ uint64_t p6 = 0, p7 = 0;
 #define SOLUTIONS         10000
 
 int main(int argc, char **argv) {
-  int       solutions = 0;
+  int       solutions;
   char      line_buf[SOLUTION_BUFSIZ];
   char      sol_buf[SOLUTION_BUFSIZ];
   size_t    sol_len;
   int       argn, i;
 
-  while (solutions++ < SOLUTIONS) {
+  for (solutions = 0; solutions < SOLUTIONS; solutions++) {
     if (!fgets(line_buf, sizeof(line_buf), stdin)) break;
     if (!solution(line_buf, sol_buf)) {
       printf("%d: %s\n", solutions, line_buf);
@@ -26,8 +26,8 @@ int main(int argc, char **argv) {
     for (i = 0; i < sol_len; i++) {
       if (sol_buf[i] == ' ' || sol_buf[i] == '\'') continue;
       p6 += 1; // number of total moves (QTM)
-      if (sol_buf[i] == 'U')
-        p7 += 1; // number of U moves (HTM)
+      if (sol_buf[i] == 'B')
+        p7 += 1; // number of B moves (HTM)
     }
 
     if (!fgets(line_buf, sizeof(line_buf), stdin)) break;
@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
     "number of phase 2 nodes expanded:    %12ld | %9ld\n"
     "number of phase 2 solutions found:   %12ld | %9.02f\n"
     "number of moves in solution (QTM):   %12ld | %9.02f\n"
-    "number of U moves in solution (HTM): %12ld | %9.02f\n\n",
+    "number of B moves in solution (HTM): %12ld | %9.02f\n\n",
     p1, p1 / solutions,
     p2, p2 / solutions,
     p3, p3 / solutions,
