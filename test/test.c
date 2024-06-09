@@ -1,5 +1,3 @@
-#include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,39 +14,11 @@ int main(int argc, char **argv) {
   char      line_buf[SOLUTION_BUFSIZ];
   char      sol_buf[SOLUTION_BUFSIZ];
   size_t    sol_len;
-  options_t options = DEFAULT_OPTIONS;
   int       argn, i;
 
-  for (argn = 1; argn < argc; argn++) {
-#define arg_match(lit) !strncmp(argv[argn], lit, sizeof(lit) - 1)
-#define arg_get(lit)   (arg_match(lit) && argn++)
-#define arg_geteq(lit) (arg_match(lit) && (argv[argn] += sizeof(lit) - 1))
-
-    if (arg_get("-d") || arg_geteq("--depth=")) {
-      options.max_depth = atoi(argv[argn]);
-    }
-
-    else if (arg_get("-t") || arg_geteq("--time=")) {
-      options.timeout_sec = atoi(argv[argn]);
-    }
-
-    else if (arg_match("-s")) {
-      options.use_separator = true;
-    }
-
-    else if (arg_get("-c") || arg_geteq("--cache=")) {
-      options.cache_dir = argv[argn];
-    }
-
-    else {
-      fprintf(stderr, "Unknown argument %s\n", argv[argn]);
-      exit(EXIT_FAILURE);
-    }
-  }
-
-  while (++solutions < SOLUTIONS) {
+  while (solutions++ < SOLUTIONS) {
     if (!fgets(line_buf, sizeof(line_buf), stdin)) break;
-    if (!solution(line_buf, &options, sol_buf)) {
+    if (!solution(line_buf, sol_buf)) {
       printf("%d: %s\n", solutions, line_buf);
       exit(EXIT_FAILURE);
     }

@@ -3,23 +3,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define COLOR_COUNT 6
-#define COLOR_FIRST U
-#define COLOR_LAST  B
-typedef enum color {
+#define FACE_COUNT    6
+typedef enum face {
 
-  // opposing faces must be 3 apart
   U, R, F, D, L, B,
 
-} color_t;
-#define FACE_COUNT 6
-#define FACE_FIRST U
-#define FACE_LAST  B
-typedef color_t face_t;
+} face_t;
 
 #define FACELET_COUNT 54
-#define FACELET_FIRST U1
-#define FACELET_LAST  B9
 typedef enum facelet {
 
   U1, U2, U3, U4, U5, U6, U7, U8, U9,
@@ -33,8 +24,6 @@ typedef enum facelet {
 
 #define CORNER_COUNT        8
 #define FACELETS_PER_CORNER 3
-#define CORNER_FIRST        URF
-#define CORNER_LAST         DRB
 typedef enum corner {
 
   URF, UFL, ULB, UBR,
@@ -44,8 +33,6 @@ typedef enum corner {
 
 #define EDGE_COUNT        12
 #define FACELETS_PER_EDGE 2
-#define EDGE_FIRST        UR
-#define EDGE_LAST         BR
 typedef enum edge {
 
   UR, UF, UL, UB,
@@ -54,38 +41,81 @@ typedef enum edge {
 
 } edge_t;
 
-typedef struct facecube {
+#define MAX_PIECES    EDGE_COUNT
+#define MOVE_COUNT    6
+typedef struct cube {
 
-  color_t facelets[FACELET_COUNT];
+  uint8_t   piece_count;
+  uint8_t   facelets_per_piece;
+  uint8_t   permutation[MAX_PIECES];
+  uint8_t   orientation[MAX_PIECES];
+  uint8_t (*permutation_table)[MAX_PIECES];
+  uint8_t (*orientation_table)[MAX_PIECES];
 
-} facecube_t;
+} cube_t;
 
-typedef struct cubiecube {
+extern uint8_t CORNER_PERMUTATION_TABLE[][MAX_PIECES];
+extern uint8_t CORNER_ORIENTATION_TABLE[][MAX_PIECES];
+extern uint8_t EDGE_PERMUTATION_TABLE[][MAX_PIECES];
+extern uint8_t EDGE_ORIENTATION_TABLE[][MAX_PIECES];
 
-  corner_t cp[8]; // corner permutation
-  uint8_t co[8];  // corner orientation
-  edge_t ep[12];  // edge permutation
-  uint8_t eo[12]; // edge orientation
+#define CORNER_CUBE { \
+  .piece_count = CORNER_COUNT, \
+  .facelets_per_piece = FACELETS_PER_CORNER, \
+  .permutation = { URF, UFL, ULB, UBR, DFR, DLF, DBL, DRB, }, \
+  .orientation = {   0,   0,   0,   0,   0,   0,   0,   0, }, \
+  .permutation_table = CORNER_PERMUTATION_TABLE, \
+  .orientation_table = CORNER_ORIENTATION_TABLE, \
+}
 
-} cubiecube_t;
+#define EDGE_CUBE { \
+  .piece_count = EDGE_COUNT, \
+  .facelets_per_piece = FACELETS_PER_EDGE, \
+  .permutation = { UR, UF, UL, UB, DR, DF, DL, DB, FR, FL, BL, BR, }, \
+  .orientation = {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, }, \
+  .permutation_table = EDGE_PERMUTATION_TABLE, \
+  .orientation_table = EDGE_ORIENTATION_TABLE, \
+}
 
-typedef struct coordcube {
+uint8_t  get_parity(cube_t *cube);
+uint16_t get_orientation(cube_t *cube);
+void     set_orientation(cube_t *cube, uint16_t orientation);
+uint16_t get_permutation(cube_t *cube, int min, int max, bool right);
+void     set_permutation(
+            cube_t *cube, uint16_t permutation, int min, int max, bool right);
 
-  // All coordinates are 0 for a solved cube except for edgeD, which is 114
-  short twist;
-  short flip;
-  short parity;
-  short slice2;
-  short corner;
-  short edgeU;
-  short edgeD;
-  int edgeUD;
+void     apply_move(cube_t *cube, int move);
 
-} coordcube_t;
+#define N_TWIST     2187
+#define N_FLIP      2048
+#define N_SLICE     11880
+#define N_CORNER    20160
+#define N_EDGE_UD   20160
+#define N_EDGE_U    1320
+#define N_EDGE_D    1320
 
-void string_to_facecube(const char *string, facecube_t *facecube);
-void facecube_to_cubiecube(facecube_t *facecube, cubiecube_t *cubiecube);
-void cubiecube_to_coordcube(cubiecube_t *cubiecube, coordcube_t *coordcube);
+#define N_PARITY    2
+#define N_SLICE1    495
+#define N_SLICE2    24
+#define N_MERGE_UD  336
 
-bool validate_string(const char *cubestring);
-bool validate_cubiecube(cubiecube_t *cubiecube);
+#define N_PHASE1 ((uint32_t)N_TWIST  * (uint32_t)N_FLIP    * (uint32_t)N_SLICE1)
+#define N_PHASE2 ((uint64_t)N_CORNER * (uint64_t)N_EDGE_UD * (uint64_t)N_SLICE2 * (uint64_t)N_PARITY)
+
+#define N_POWER 3
+#define N_MOVE  (MOVE_COUNT * N_POWER)
+
+void     set_twist(cube_t *cube, uint16_t twist);
+uint16_t get_twist(cube_t *cube);
+void     set_corner(cube_t *cube, uint16_t corner);
+uint16_t get_corner(cube_t *cube);
+void     set_flip(cube_t *cube, uint16_t flip);
+uint16_t get_flip(cube_t *cube);
+void     set_slice(cube_t *cube, uint16_t slice);
+uint16_t get_slice(cube_t *cube);
+void     set_edgeU(cube_t *cube, uint16_t edgeU);
+uint16_t get_edgeU(cube_t *cube);
+void     set_edgeD(cube_t *cube, uint16_t edgeD);
+uint16_t get_edgeD(cube_t *cube);
+void     set_edgeUD(cube_t *cube, uint16_t edgeUD);
+uint16_t get_edgeUD(cube_t *cube);

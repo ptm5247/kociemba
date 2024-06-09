@@ -163,3 +163,42 @@ number of U moves in solution (HTM):        40619 |      4.06
 |            Memory (B) | 4,368,407 | 7,119,184 | 7,119,184 |    +62.97% |    +62.97% |
 | Solution Length (QTM) |     30.41 |     30.41 |     30.41 |        +0% |        +0% |
 |         U Moves (HTM) |      4.06 |      4.06 |      4.06 |        +0% |        +0% |
+
+## Version 0.5
+### Changes
+* complete rewrite from scratch
+* add all goal distances to heuristic tables
+### Goals
+* reorganize and separate code
+* replace IDA* with direct graph search
+* trade a ton of memory for a ton of speed
+### Output
+```
+Version 0.5
+Allocating...                   Done in  0.000s
+Reading move tables...          Done in  0.003s
+Reading heuristic tables...     Done in  5.271s
+Caching heuristic tables...     Done in 16.093s
+Cache Sum:                      0x001BF2CBF0BD9
+Cache Size:                     0x00002F7EC4FB4
+Progress: 100%
+                                            TOTAL | PER SOLVE
+number of phase 1 nodes expanded:          864759 |        86
+number of phase 1 solutions found:          10000 |         0
+number of phase 2 trees explored:           10000 |         0
+number of phase 2 nodes expanded:          778654 |        77
+number of phase 2 solutions found:          10000 |      1.00
+number of moves in solution (QTM):         345686 |     34.57
+number of U moves in solution (HTM):        49290 |      4.93
+
+2.03user 4.38system 0:21.66elapsed 29%CPU (0avgtext+0avgdata 12452336maxresident)k
+26975952inputs+0outputs (117771major+1856458minor)pagefaults 0swaps
+```
+### Results:
+|                       | Reference |  Previous |        Current | Difference | Cumulative |
+|----------------------:|:---------:|:---------:|:--------------:|:----------:|:----------:|
+|         Prep Time (s) |      0.00 |      0.00 |          21.37 |   +100.00% |   +100.00% |
+|        Solve Time (s) |     92.65 |     37.27 |           0.29 |    -99.22% |    -99.69% |
+|            Memory (B) | 4,368,407 | 7,119,184 | 12,749,393,844 |  +178,985% |  +291,755% |
+| Solution Length (QTM) |     30.41 |     30.41 |          34.57 |    +13.68% |    +13.68% |
+|         U Moves (HTM) |      4.06 |      4.06 |           4.93 |    +20.43% |    +20.43% |

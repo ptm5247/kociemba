@@ -1,393 +1,299 @@
-#include <stdio.h>
 #include <string.h>
 
-#include "cache.h"
 #include "cube.h"
 
-// Maps a corner to the facelets that make it up. The first of the three
-// facelets defines the orientation, and the other two proceed clockwise.
-static facelet_t CORNER_TO_FACELETS[CORNER_COUNT][FACELETS_PER_CORNER] = {
-  [URF] = { U9, R1, F3 },
-  [UFL] = { U7, F1, L3 },
-  [ULB] = { U1, L1, B3 },
-  [UBR] = { U3, B1, R3 },
-  [DFR] = { D3, F9, R7 },
-  [DLF] = { D1, L9, F7 },
-  [DBL] = { D7, B9, L7 },
-  [DRB] = { D9, R9, B7 },
+uint8_t CORNER_PERMUTATION_TABLE[][MAX_PIECES] = {
+  { UBR, URF, UFL, ULB, DFR, DLF, DBL, DRB, }, // U
+  { DFR, UFL, ULB, URF, DRB, DLF, DBL, UBR, }, // R
+  { UFL, DLF, ULB, UBR, URF, DFR, DBL, DRB, }, // F
+  { URF, UFL, ULB, UBR, DLF, DBL, DRB, DFR, }, // D
+  { URF, ULB, DBL, UBR, DFR, UFL, DLF, DRB, }, // L
+  { URF, UFL, UBR, DRB, DFR, DLF, ULB, DBL, }, // B
+  { UBR, URF, UFL, ULB, DLF, DBL, DRB, DFR, }, // E
+  { DFR, ULB, DBL, URF, DRB, UFL, DLF, UBR, }, // M
+  { UFL, DLF, UBR, DRB, URF, DFR, ULB, DBL, }, // S
+}, CORNER_ORIENTATION_TABLE[][MAX_PIECES] = {
+  {   0,   0,   0,   0,   0,   0,   0,   0, }, // U
+  {   2,   0,   0,   1,   1,   0,   0,   2, }, // R
+  {   1,   2,   0,   0,   2,   1,   0,   0, }, // F
+  {   0,   0,   0,   0,   0,   0,   0,   0, }, // D
+  {   0,   1,   2,   0,   0,   2,   1,   0, }, // L
+  {   0,   0,   1,   2,   0,   0,   2,   1, }, // B
+  {   0,   0,   0,   0,   0,   0,   0,   0, }, // E
+  {   2,   1,   2,   1,   1,   2,   1,   2, }, // M
+  {   1,   2,   1,   2,   2,   1,   2,   1, }, // S
+}, EDGE_PERMUTATION_TABLE[][MAX_PIECES] = {
+  { UB, UR, UF, UL, DR, DF, DL, DB, FR, FL, BL, BR, }, // U
+  { FR, UF, UL, UB, BR, DF, DL, DB, DR, FL, BL, UR, }, // R
+  { UR, FL, UL, UB, DR, FR, DL, DB, UF, DF, BL, BR, }, // F
+  { UR, UF, UL, UB, DF, DL, DB, DR, FR, FL, BL, BR, }, // D
+  { UR, UF, BL, UB, DR, DF, FL, DB, FR, UL, DL, BR, }, // L
+  { UR, UF, UL, BR, DR, DF, DL, BL, FR, FL, UB, DB, }, // B
+  { UB, UR, UF, UL, DF, DL, DB, DR, FR, FL, BL, BR, }, // E
+  { FR, UF, BL, UB, BR, DF, FL, DB, DR, UL, DL, UR, }, // M
+  { UR, FL, UL, BR, DR, FR, DL, BL, UF, DF, UB, DB, }, // S
+}, EDGE_ORIENTATION_TABLE[][MAX_PIECES] = {
+  {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, }, // U
+  {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, }, // R
+  {  0,  1,  0,  0,  0,  1,  0,  0,  1,  1,  0,  0, }, // F
+  {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, }, // D
+  {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, }, // L
+  {  0,  0,  0,  1,  0,  0,  0,  1,  0,  0,  1,  1, }, // B
+  {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, }, // E
+  {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, }, // M
+  {  0,  1,  0,  1,  0,  1,  0,  1,  1,  1,  1,  1, }, // S
 };
 
-// Maps an edge to the facelets that make it up. The first of the two
-// facelets defines the default orientation.
-static facelet_t EDGE_TO_FACELETS[EDGE_COUNT][FACELETS_PER_EDGE] = {
-  [UR] = { U6, R2 },
-  [UF] = { U8, F2 },
-  [UL] = { U4, L2 },
-  [UB] = { U2, B2 },
-  [DR] = { D6, R8 },
-  [DF] = { D2, F8 },
-  [DL] = { D4, L8 },
-  [DB] = { D8, B8 },
-  [FR] = { F6, R4 },
-  [FL] = { F4, L6 },
-  [BL] = { B6, L4 },
-  [BR] = { B4, R6 },
-};
+static int choose(int n, int k) {
+  int i = n, j = 1, s = 1;
 
-// Maps a corner to the colors that make it up.
-static color_t CORNER_TO_COLORS[CORNER_COUNT][FACELETS_PER_CORNER] = {
-  [URF] = { U, R, F },
-  [UFL] = { U, F, L },
-  [ULB] = { U, L, B },
-  [UBR] = { U, B, R },
-  [DFR] = { D, F, R },
-  [DLF] = { D, L, F },
-  [DBL] = { D, B, L },
-  [DRB] = { D, R, B },
-};
+  if (n < k)         return 0;
+  if (k > n / 2)     k = n - k;
+  while (i != n - k) s = (s * i--) / j++;
 
-// Maps an edge to the colors that make it up.
-static color_t EDGE_TO_COLORS[EDGE_COUNT][FACELETS_PER_EDGE] = {
-  [UR] = { U, R },
-  [UF] = { U, F },
-  [UL] = { U, L },
-  [UB] = { U, B },
-  [DR] = { D, R },
-  [DF] = { D, F },
-  [DL] = { D, L },
-  [DB] = { D, B },
-  [FR] = { F, R },
-  [FL] = { F, L },
-  [BL] = { B, L },
-  [BR] = { B, R },
-};
-
-static int Cnk(int n, int k) {
-  int i, j, s;
-  if (n < k)
-    return 0;
-  if (k > n / 2)
-    k = n - k;
-  for (s = 1, i = n, j = 1; i != n - k; i--, j++) {
-    s *= i;
-    s /= j;
-  }
   return s;
 }
 
-static void rotateLeft_corner(corner_t* arr, int l, int r) {
-  int i;
-  corner_t temp = arr[l];
-  for (i = l; i < r; i++)
-    arr[i] = arr[i + 1];
-  arr[r] = temp;
-}
-
-static void rotateLeft_edge(edge_t* arr, int l, int r) {
-  int i;
-  edge_t temp = arr[l];
-  for (i = l; i < r; i++)
-    arr[i] = arr[i + 1];
-  arr[r] = temp;
-}
-
-static short getTwist(cubiecube_t* cubiecube) {
-  short ret = 0;
-  int i;
-  for (i = URF; i < DRB; i++)
-    ret = (short) (3 * ret + cubiecube->co[i]);
-  return ret;
-}
-
-static short getFlip(cubiecube_t* cubiecube) {
-  int i;
-  short ret = 0;
-  for (i = UR; i < BR; i++)
-    ret = (short) (2 * ret + cubiecube->eo[i]);
-  return ret;
-}
-
-static short getFRtoBR(cubiecube_t* cubiecube) {
-  int a = 0, x = 0, j;
-  int b = 0;
-  edge_t edge4[4] = {0};
-  // compute the index a < (12 choose 4) and the permutation array perm.
-  for (j = BR; j >= UR; j--)
-    if (FR <= cubiecube->ep[j] && cubiecube->ep[j] <= BR) {
-      a += Cnk(11 - j, x + 1);
-      edge4[3 - x++] = cubiecube->ep[j];
-    }
-
-  for (j = 3; j > 0; j--)// compute the index b < 4! for the
-  // permutation in perm
-  {
-    int k = 0;
-    while (edge4[j] != j + 8) {
-      rotateLeft_edge(edge4, 0, j);
-      k++;
-    }
-    b = (j + 1) * b + k;
-  }
-  return (short) (24 * a + b);
-}
-
-static short getURFtoDLF(cubiecube_t* cubiecube) {
-  int a = 0, x = 0, j, b = 0;
-  corner_t corner6[6] = {0};
-  // compute the index a < (8 choose 6) and the corner permutation.
-  for (j = URF; j <= DRB; j++)
-    if (cubiecube->cp[j] <= DLF) {
-      a += Cnk(j, x + 1);
-      corner6[x++] = cubiecube->cp[j];
-    }
-
-  for (j = 5; j > 0; j--)// compute the index b < 6! for the
-  // permutation in corner6
-  {
-    int k = 0;
-    while (corner6[j] != j) {
-      rotateLeft_corner(corner6, 0, j);
-      k++;
-    }
-    b = (j + 1) * b + k;
-  }
-  return (short) (720 * a + b);
-}
-
-static int getURtoDF(cubiecube_t* cubiecube) {
-  int a = 0, x = 0;
-  int b = 0, j;
-  edge_t edge6[6] = {0};
-  // compute the index a < (12 choose 6) and the edge permutation.
-  for (j = UR; j <= BR; j++)
-    if (cubiecube->ep[j] <= DF) {
-      a += Cnk(j, x + 1);
-      edge6[x++] = cubiecube->ep[j];
-    }
-
-  for (j = 5; j > 0; j--)// compute the index b < 6! for the
-  // permutation in edge6
-  {
-    int k = 0;
-    while (edge6[j] != j) {
-      rotateLeft_edge(edge6, 0, j);
-      k++;
-    }
-    b = (j + 1) * b + k;
-  }
-  return 720 * a + b;
-}
-
-static short getURtoUL(cubiecube_t* cubiecube) {
-  int a = 0, b = 0, x = 0, j;
-  edge_t edge3[3] = {0};
-  // compute the index a < (12 choose 3) and the edge permutation.
-  for (j = UR; j <= BR; j++)
-    if (cubiecube->ep[j] <= UL) {
-      a += Cnk(j, x + 1);
-      edge3[x++] = cubiecube->ep[j];
-    }
-
-  for (j = 2; j > 0; j--)// compute the index b < 3! for the
-  // permutation in edge3
-  {
-    int k = 0;
-    while (edge3[j] != j) {
-      rotateLeft_edge(edge3, 0, j);
-      k++;
-    }
-    b = (j + 1) * b + k;
-  }
-  return (short) (6 * a + b);
-}
-
-static short getUBtoDF(cubiecube_t* cubiecube) {
-  int a = 0, x = 0, b = 0, j;
-  edge_t edge3[3] = {0};
-  // compute the index a < (12 choose 3) and the edge permutation.
-  for (j = UR; j <= BR; j++)
-    if (UB <= cubiecube->ep[j] && cubiecube->ep[j] <= DF) {
-      a += Cnk(j, x + 1);
-      edge3[x++] = cubiecube->ep[j];
-    }
-
-  for (j = 2; j > 0; j--)// compute the index b < 3! for the
-  // permutation in edge3
-  {
-    int k = 0;
-    while (edge3[j] != UB + j) {
-      rotateLeft_edge(edge3, 0, j);
-      k++;
-    }
-    b = (j + 1) * b + k;
-  }
-  return (short) (6 * a + b);
-}
-
-static uint8_t corner_parity(cubiecube_t* cubiecube) {
+uint8_t get_parity(cube_t *cube) {
   int i, j, sum = 0;
 
-  for (i = CORNER_FIRST + 1; i <= CORNER_LAST; i++)
-    for (j = CORNER_FIRST; j < i; j++)
-      if (cubiecube->cp[j] > cubiecube->cp[i]) sum += 1;
+  for (i = 1; i <= cube->piece_count; i++)
+    for (j = 0; j < i; j++)
+      if (cube->permutation[j] > cube->permutation[i]) sum += 1;
 
   return (uint8_t) (sum & 1);
 }
 
-static uint8_t edge_parity(cubiecube_t* cubiecube) {
-  int i, j, sum = 0;
+// orientation coordinate
+//
+// The orientation of a piece is the number of CCW turns (or flips) required to
+// get a piece's primary color onto the piece's primary face. The primary color
+// is the U or D color (or the F or B color for edges that contain nether the U
+// color nor the D color), and the primary face is the U or D face (or the F or
+// B face for edges which touch neither the U face nor the D face).
+//
+// The orientation coordinate is an X-digit, base-Y number (with Y^X values)
+// where X=N_PIECES-1 and Y=FACELETS_PER_PIECE. The Nth digit (from the left)
+// is the orientation of the piece in position N (i.e. for n=0 on a CornerCube,
+// the corner in the URF position, not the URF corner itself). The sum of all
+// orientations must be divisible by FACELETS_PER_PIECE, so the orientation of
+// the final piece can be determined by parity.
 
-  for (i = EDGE_FIRST + 1; i <= EDGE_LAST; i++)
-    for (j = EDGE_FIRST; j < i; j++)
-      if (cubiecube->ep[j] > cubiecube->ep[i]) sum += 1;
+uint16_t get_orientation(cube_t *cube) {
+  uint16_t orientation = 0;
+  int      i;
 
-  return (uint8_t) (sum & 1);
+  for (i = 0; i < cube->piece_count - 1; i++) {
+    orientation *= cube->facelets_per_piece;
+    orientation += cube->orientation[i];
+  }
+
+  return orientation;
 }
 
-void string_to_facecube(const char *cubestring, facecube_t *facecube) {
+void set_orientation(cube_t *cube, uint16_t orientation) {
+  int parity = 0;
   int i;
 
-  for (i = 0; i < FACELET_COUNT; i++) {
-    switch (cubestring[i]) {
+  for (i = cube->piece_count - 2; i >= 0; i--) {
+    cube->orientation[i] = orientation % cube->facelets_per_piece;
+    orientation /= cube->facelets_per_piece;
+    parity += cube->orientation[i];
+  }
 
-    case 'U': facecube->facelets[i] = U; break;
-    case 'R': facecube->facelets[i] = R; break;
-    case 'F': facecube->facelets[i] = F; break;
-    case 'D': facecube->facelets[i] = D; break;
-    case 'L': facecube->facelets[i] = L; break;
-    case 'B': facecube->facelets[i] = B; break;
+  cube->orientation[cube->piece_count - 1] =
+    (cube->piece_count * cube->facelets_per_piece - parity) % cube->facelets_per_piece;
+}
 
+// permutation coordinate
+//
+// The permutation has two components: combination and order.
+// The value is determined by: perm = (combination * MAX_ORDER) + order.
+// The permutation is defined for a subset S of this cube's piece list. For
+// example, slice coordinate is the permutation of the E-slice edges. So, for
+// the slice coordinate, S = { FR, FL, BL, BR }.
+//
+// For the slice coordinate example, consider the following table:
+//   Postion: | UR | UF | UL | UB | DR | DF | DL | DB | FR | FL | BL | BR |
+//         n: |  0 |  1 |  2 |  3 |  4 |  5 |  6 |  7 |  8 |  9 | 10 | 11 |
+// Occupied?: |    | FR |    |    | BL |    |    |    | FL | BR |    |    |
+// where the Occupied? row indicates the positions of each member of S.
+//
+// The combination component has (N_PIECES choose len(S)) possible values.
+// Consider a bitmask constructed from the Occupied? row of the above table.
+// The combination component = the sum of nCk for all set bits, where n = the
+// bit position (from the left) and k-1 = the number of set bits to the left of
+// bit n. For the above table (bitmask = 010010001100):
+// combination = 1C1 + 4C2 + 8C3 + 9C4 = 189
+//
+// The order component has len(S)! possible values.
+// Consider the ordering of S defined by reading the Occupied? row of the table
+// from left to right. To calculate the order component:
+// For I = len(S) downto 2:
+//   Rotate the first I elements of S to the left K times such that the largest
+//   of the first I elements of S ends up in the rightmost position.
+//   Increment the order component by K * (I-1)!
+// For the above table (S_ord = [ FR, BL, FL, BR ]):
+// order = 0*3! + 2*2! + 1*1! = 5
+
+uint16_t get_permutation(cube_t *cube, int min, int max, bool right) {
+  int      max_order = 1; // len(S)!
+  uint8_t  ordered[MAX_PIECES], temp;
+  uint16_t combination, order, partial;
+  int      n, k, i;
+
+  combination = 0;
+  order       = 0;
+
+  if (right) for (n = cube->piece_count - 1, k = max - min; n >= 0; n--) {
+    if (min <= cube->permutation[n] && cube->permutation[n] <= max) {
+      ordered[k--] = cube->permutation[n];
+      combination += choose(cube->piece_count - 1 - n, max - min - k);
+      max_order *= k + 2;
+    }
+  } else for (n = 0, k = 0; n < cube->piece_count; n++) {
+    if (min <= cube->permutation[n] && cube->permutation[n] <= max) {
+      ordered[k++] = cube->permutation[n];
+      combination += choose(n, k);
+      max_order *= k;
+    }
+  }
+
+  for (n = max - min; n >= 1; n--) {
+    for (partial = 0; ordered[n] != min + n; partial++) {
+      temp = ordered[0];
+      for (i = 0; i < n; i++) ordered[i] = ordered[i + 1];
+      ordered[n] = temp;
+    }
+    order = ((n + 1) * order) + partial;
+  }
+
+  return (combination * max_order) + order;
+}
+
+void set_permutation(
+  cube_t *cube, uint16_t permutation, int min, int max, bool right) {
+  int      max_order = 1; // len(S)!
+  uint8_t  ordered[MAX_PIECES], temp;
+  uint16_t combination, order, partial;
+  int      n, k, i;
+
+  partial = right ? 0 : (cube->piece_count - 1);
+  for (i = 0; i < cube->piece_count; i++)
+    cube->permutation[i] = partial;
+
+  for (n = min, k = 0; n <= max; n++) {
+    ordered[k++] = n;
+    max_order *= k;
+  }
+  combination = permutation / max_order;
+  order       = permutation % max_order;
+
+  for (n = 1; n <= max - min; n++) {
+    k = order % (n + 1);
+    order /= (n + 1);
+    while (k--) {
+      temp = ordered[n];
+      for (i = n; i >= 1; i--) ordered[i] = ordered[i - 1];
+      ordered[0] = temp;
+    }
+  }
+
+  if (right) for (n = 0, k = max - min; k >= 0; n++) {
+    if (combination >= (partial = choose(cube->piece_count - 1 - n, k + 1))) {
+      cube->permutation[n] = ordered[max - min - k--];
+      combination -= partial;
+    }
+  } else for (n = cube->piece_count - 1, k = max - min; k >= 0; n--) {
+    if (combination >= (partial = choose(n, k + 1))) {
+      cube->permutation[n] = ordered[k--];
+      combination -= partial;
     }
   }
 }
 
-void facecube_to_cubiecube(facecube_t *facecube, cubiecube_t *cubiecube) {
-  int i, j;
-  int8_t ori;
-  color_t col1, col2;
+void apply_move(cube_t *cube, int move) {
+  uint8_t permutation[MAX_PIECES];
+  uint8_t orientation[MAX_PIECES];
+  uint8_t i, p, o;
 
-  for (i = 0; i < CORNER_COUNT; i++)
-    cubiecube->cp[i] = CORNER_FIRST; // invalidate corners
-  for (i = 0; i < EDGE_COUNT; i++)
-    cubiecube->ep[i] = EDGE_FIRST;   // and edges
-
-  for (i = 0; i < CORNER_COUNT; i++) {
-    // get the colors of the cubie at corner i, starting with U/D
-    for (ori = 0; ori < FACELETS_PER_CORNER; ori++)
-      if (facecube->facelets[CORNER_TO_FACELETS[i][ori]] == U ||
-          facecube->facelets[CORNER_TO_FACELETS[i][ori]] == D) break;
-
-    col1 = facecube->facelets[CORNER_TO_FACELETS[i][(ori + 1) % 3]];
-    col2 = facecube->facelets[CORNER_TO_FACELETS[i][(ori + 2) % 3]];
-
-    for (j = 0; j < CORNER_COUNT; j++) {
-      if (col1 == CORNER_TO_COLORS[j][1] &&
-          col2 == CORNER_TO_COLORS[j][2]) {
-        // in cornerposition i we have cornercubie j
-        cubiecube->cp[i] = j;
-        cubiecube->co[i] = ori % 3;
-        break;
-      }
-    }
+  for (i = 0; i < cube->piece_count; i++) {
+    p = cube->permutation_table[move][i];
+    o = cube->orientation_table[move][i];
+    permutation[i] = cube->permutation[p];
+    orientation[i] = (cube->orientation[p] + o) % cube->facelets_per_piece;
   }
 
-  for (i = 0; i < EDGE_COUNT; i++) {
-    for (j = 0; j < EDGE_COUNT; j++) {
-      if (facecube->facelets[EDGE_TO_FACELETS[i][0]] == EDGE_TO_COLORS[j][0] &&
-          facecube->facelets[EDGE_TO_FACELETS[i][1]] == EDGE_TO_COLORS[j][1]) {
-        cubiecube->ep[i] = j;
-        cubiecube->eo[i] = 0;
-        break;
-      }
-      if (facecube->facelets[EDGE_TO_FACELETS[i][0]] == EDGE_TO_COLORS[j][1] &&
-          facecube->facelets[EDGE_TO_FACELETS[i][1]] == EDGE_TO_COLORS[j][0]) {
-        cubiecube->ep[i] = j;
-        cubiecube->eo[i] = 1;
-        break;
-      }
-    }
-  }
+  memcpy(cube->permutation, permutation, sizeof(permutation));
+  memcpy(cube->orientation, orientation, sizeof(orientation));
 }
 
-void cubiecube_to_coordcube(cubiecube_t *cubiecube, coordcube_t *coordcube) {
-  coordcube->twist    = getTwist(cubiecube);
-  coordcube->flip     = getFlip(cubiecube);
-  coordcube->parity   = corner_parity(cubiecube);
-  coordcube->slice2   = getFRtoBR(cubiecube);
-  coordcube->corner = getURFtoDLF(cubiecube);
-  coordcube->edgeU   = getURtoUL(cubiecube);
-  coordcube->edgeD   = getUBtoDF(cubiecube);
-  coordcube->edgeUD   = getURtoDF(cubiecube); // only needed in phase2
+// twist: corner orientation coordinate [0, 3^7) (2187)
+
+void set_twist(cube_t *cube, uint16_t twist) {
+  return set_orientation(cube, twist);
 }
 
-/**
- * Checks the length of a cubestring, if it has the correct number of each
- * color, and if the center facelets are in the correct positions.
-*/
-bool validate_string(const char *cubestring) {
-  int i;
-  int color_count[COLOR_COUNT] = { 0 };
-
-  if (strspn(cubestring, "URFDLB") != FACELET_COUNT) {
-    printf("Cubestring length must be exactly %d.\n", FACELET_COUNT);
-    return false;
-  }
-
-  for (i = 0; i < FACELET_COUNT; i++) {
-    switch (cubestring[i]) {
-
-    case 'U': color_count[U]++; break;
-    case 'R': color_count[R]++; break;
-    case 'F': color_count[F]++; break;
-    case 'D': color_count[D]++; break;
-    case 'L': color_count[L]++; break;
-    case 'B': color_count[B]++; break;
-
-    }
-  }
-
-  for (i = 0; i < COLOR_COUNT; i++) {
-    if (color_count[i] != FACELET_COUNT / COLOR_COUNT) {
-      printf(
-        "Cubestring must contain exactly %d of each color.\n",
-        FACELET_COUNT / COLOR_COUNT
-      );
-      return false;
-    }
-  }
-
-  if (cubestring[ 4] != 'U' || cubestring[13] != 'R' || cubestring[22] != 'F' ||
-      cubestring[31] != 'D' || cubestring[40] != 'L' || cubestring[49] != 'B') {
-    puts("Center facelets are in the wrong order. See the help text.");
-    return false;
-  }
-
-  return true;
+uint16_t get_twist(cube_t *cube) {
+  return get_orientation(cube);
 }
 
-bool validate_cubiecube(cubiecube_t *cubiecube) {
-  int i, parity_sum;
-  int edge_count[EDGE_COUNT]     = { 0 };
-  int corner_count[CORNER_COUNT] = { 0 };
+// corner: corner permutation coordinate [0, 8C6 * 6!) (20160)
 
-  for (i = 0, parity_sum = 0; i < EDGE_COUNT; i++) {
-    edge_count[cubiecube->ep[i]]++;
-    parity_sum += cubiecube->eo[i];
-  }
-  for (i = 0; i < EDGE_COUNT; i++)
-    if (edge_count[i] != 1) return false;   // missing edges
-  if (parity_sum % 2) return false;         // flipped edgea
+void set_corner(cube_t *cube, uint16_t corner) {
+  return set_permutation(cube, corner, URF, DLF, false);
+}
 
-  for (i = 0, parity_sum = 0; i < CORNER_COUNT; i++) {
-    corner_count[cubiecube->cp[i]]++;
-    parity_sum += cubiecube->co[i];
-  }
-  for (i = 0; i < CORNER_COUNT; i++)
-    if (corner_count[i] != 1) return false; // missing corners
-  if (parity_sum % 3) return false;         // twisted corner
+uint16_t get_corner(cube_t *cube) {
+  return get_permutation(cube, URF, DLF, false);
+}
 
-  if (edge_parity(cubiecube) ^ corner_parity(cubiecube))
-    return false;                           // parity error
+// flip: edge orientation coordinate [0, 2^11) (2048)
 
-  return true;                              // cube ok
+void set_flip(cube_t *cube, uint16_t flip) {
+  return set_orientation(cube, flip);
+}
+
+uint16_t get_flip(cube_t *cube) {
+  return get_orientation(cube);
+}
+
+// slice: E edge permutation coordinate [0, 12C4 * 4!) (11880)
+
+void set_slice(cube_t *cube, uint16_t slice) {
+  return set_permutation(cube, slice, FR, BR, true);
+}
+
+uint16_t get_slice(cube_t *cube) {
+  return get_permutation(cube, FR, BR, true);
+}
+
+// edgeU: Phase 1 U edge permutation coordinate [0, 12C3 * 3!) (1320)
+
+void set_edgeU(cube_t *cube, uint16_t edgeU) {
+  return set_permutation(cube, edgeU, UR, UL, false);
+}
+
+uint16_t get_edgeU(cube_t *cube) {
+  return get_permutation(cube, UR, UL, false);
+}
+
+// edgeD: Phase 1 D edge permutation coordinate [0, 12C3 * 3!) (1320)
+
+void set_edgeD(cube_t *cube, uint16_t edgeD) {
+  return set_permutation(cube, edgeD, UB, DF, false);
+}
+
+uint16_t get_edgeD(cube_t *cube) {
+  return get_permutation(cube, UB, DF, false);
+}
+
+// edgeUD: Phase 2 non-E edge permutation coordinate [0, 8C6 * 6!) (20160)
+
+void set_edgeUD(cube_t *cube, uint16_t edgeUD) {
+  return set_permutation(cube, edgeUD, UR, DF, false);
+}
+
+uint16_t get_edgeUD(cube_t *cube) {
+  return get_permutation(cube, UR, DF, false);
 }
