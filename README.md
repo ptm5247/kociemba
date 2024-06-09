@@ -244,3 +244,37 @@ number of B moves in solution (HTM):            0 |      0.00
 |            Memory (B) | 4,368,407 | 12,749,393,844 | 10,311,195,506 |    -19.12% |  +235,940% |
 | Solution Length (QTM) |     30.41 |          34.57 |          31.93 |     -7.64% |     +5.00% |
 |         U Moves (HTM) |      4.06 |           4.93 |           0.00 |   -100.00% |   -100.00% |
+
+## Version 0.7
+### Changes
+* fix parity issue
+* mmap heuristic tables
+### Goals
+* reduce setup time
+### Output
+```
+Version 0.7
+Caching heuristic tables...     Done in  9.571s
+Cache Sum:                      0x000075925FA00
+Cache Size:                     0x0000266985B72
+Progress: 100%
+                                            TOTAL | PER SOLVE
+number of phase 1 nodes expanded:          741309 |        74
+number of phase 1 solutions found:          10000 |         1
+number of phase 2 trees explored:           10000 |         1
+number of phase 2 nodes expanded:          679647 |        67
+number of phase 2 solutions found:          10000 |      1.00
+number of moves in solution (QTM):         319303 |     31.93
+number of B moves in solution (HTM):            0 |      0.00
+
+0.48user 0.80system 0:09.71elapsed 13%CPU (0avgtext+0avgdata 10071112maxresident)k
+20141384inputs+0outputs (78668major+158031minor)pagefaults 0swaps
+```
+### Results:
+|                       | Reference |       Previous |        Current | Difference | Cumulative |
+|----------------------:|:---------:|:--------------:|:--------------:|:----------:|:----------:|
+|         Prep Time (s) |      0.00 |          14.11 |           9.57 |    -32.18% |   +100.00% |
+|        Solve Time (s) |     92.65 |           0.32 |           0.14 |    -56.25% |    -99.88% |
+|            Memory (B) | 4,368,407 | 10,311,195,506 | 10,311,195,506 |     +0.00% |  +235,940% |
+| Solution Length (QTM) |     30.41 |          31.93 |          31.93 |     +0.00% |     +5.00% |
+|         U Moves (HTM) |      4.06 |           0.00 |           0.00 |     +0.00% |   -100.00% |

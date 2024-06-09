@@ -111,7 +111,7 @@ static void write_h_table_phase1(const char *name, int min, int max) {
 
 static void write_h_table_phase2(const char *name, int min, int max) {
   uint8_t  *table = malloc(N_PHASE2 / 2);
-  uint64_t *table2 = malloc(100 * sizeof(uint64_t));
+  uint64_t *table2 = malloc(NMEMB_2U * sizeof(uint64_t));
   uint64_t  i, j, k;
   int       depth;
   uint64_t  done, last_done;
@@ -204,7 +204,7 @@ static void write_h_table_phase2(const char *name, int min, int max) {
     if (depth == 2 && !reset) {
       print_summary(depth, N_PHASE2, N_PHASE2, "\n");
       k = 0;
-      memset(table2, 0x00, 100 * sizeof(uint64_t));
+      memset(table2, 0x00, NMEMB_2U * sizeof(uint64_t));
       for (i = 0; i < N_PHASE2; i++) {
         if (get_table(table, i) <= depth) {
           table2[k++] = i << 2 | get_table(table, i);
@@ -216,7 +216,7 @@ static void write_h_table_phase2(const char *name, int min, int max) {
         }
       }
       printf("\rCondensed %ld %dU entries into a second table%11s\n", k, depth, "");
-      fwrite(table2, 100 * sizeof(uint64_t), 1, file2);
+      fwrite(table2, NMEMB_2U * sizeof(uint64_t), 1, file2);
       fclose(file2);
       free(table2);
       depth -= 2;

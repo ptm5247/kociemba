@@ -57,7 +57,7 @@ static int choose(int n, int k) {
 uint8_t get_parity(cube_t *cube) {
   int i, j, sum = 0;
 
-  for (i = 1; i <= cube->piece_count; i++)
+  for (i = 1; i < cube->piece_count; i++)
     for (j = 0; j < i; j++)
       if (cube->permutation[j] > cube->permutation[i]) sum += 1;
 

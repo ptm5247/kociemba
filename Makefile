@@ -10,7 +10,7 @@ CFLAGS = -Ofast -march=native -msse2
 TEST = test
 TEST_INPUT = javares.txt
 
-VERSION = 0.6
+VERSION = 0.7
 
 test: $(BINDIR)/$(TEST) $(CACHEDIR) FORCE
 	@echo Version $(VERSION)

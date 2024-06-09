@@ -133,7 +133,7 @@ bool solution(const char *cubestring, char solution[SOLUTION_BUFSIZ]) {
   search[0].edgeD = get_edgeD(&edges);
   search[0].corner = get_corner(&corners);
   search[0].slice2 = get_slice(&edges);
-  search[0].parity = 1 - get_parity(&corners);
+  search[0].parity = get_parity(&corners);
 
   for (i = 0; i < depth; i++) {
     move = N_POWER * search[i].axis + search[i].power - 1;
@@ -194,12 +194,12 @@ bool solution(const char *cubestring, char solution[SOLUTION_BUFSIZ]) {
       slice2 =   MOVE_SLICE[search[depth].slice2][move];
       parity =  MOVE_PARITY[search[depth].parity][move];
       phase2 = phase2_coordinate(edgeUD, corner, slice2, parity);
-      for (i = 0; i < 100; i++) {
+      for (i = 0; i < NMEMB_2U; i++) {
         if (HEURISTIC_PHASE2_2U[i] >> 2 == phase2) {
           heuristic = HEURISTIC_PHASE2_2U[i] & 0b11;
           break;
         }
-      } if (i == 100) continue;
+      } if (i == NMEMB_2U) continue;
       if (heuristic < search[depth].heuristic) {
         search[depth].axis = move / 3;
         search[depth].power = move % 3 + 1;
@@ -329,10 +329,10 @@ static bool initialize(const char *cubestring, cube_t *corners, cube_t *edges) {
     return false;
   }
 
-  // if (get_parity(edges) ^ get_parity(corners)) {
-  //   printf("parity error\n");
-  //   return false;
-  // }
+  if (get_parity(edges) ^ get_parity(corners)) {
+    printf("parity error\n");
+    return false;
+  }
 
   return true;
 }
@@ -344,48 +344,34 @@ static void cache_tables() {
 #define delta_t(now, start) \
   (now.tv_sec - start.tv_sec + (now.tv_nsec - start.tv_nsec) / 1000000000.)
 
-#define start(description)           \
-  printf("%-32s", description"..."); \
-  fflush(stdout);                    \
-  start = now;
-
-#define finish()                       \
-  clock_gettime(CLOCK_REALTIME, &now); \
-  printf("Done in %6.3fs\n", delta_t(now, start));
-
-  clock_gettime(CLOCK_REALTIME, &now);
-  start("Allocating");
-  HEURISTIC_PHASE1 = malloc(N_PHASE1 / 4);
-  HEURISTIC_PHASE2 = malloc(N_PHASE2 / 2);
-  HEURISTIC_PHASE2_2U = malloc(100 * sizeof(uint64_t));
-  finish();
-  start("Reading move tables");
-  read_table(TABLE_DIR, MOVE_DIR"/flip",   MOVE_FLIP,    sizeof(MOVE_FLIP) );
-  read_table(TABLE_DIR, MOVE_DIR"/twist",  MOVE_TWIST,   sizeof(MOVE_TWIST));
-  read_table(TABLE_DIR, MOVE_DIR"/slice",  MOVE_SLICE,   sizeof(MOVE_SLICE));
-  read_table(TABLE_DIR, MOVE_DIR"/edgeU",  MOVE_EDGE_U,  sizeof(MOVE_EDGE_U));
-  read_table(TABLE_DIR, MOVE_DIR"/edgeD",  MOVE_EDGE_D,  sizeof(MOVE_EDGE_D));
-  read_table(TABLE_DIR, MOVE_DIR"/edgeUD", MOVE_EDGE_UD, sizeof(MOVE_EDGE_UD));
-  read_table(TABLE_DIR, MOVE_DIR"/corner", MOVE_CORNER,  sizeof(MOVE_CORNER));
+  read_table(TABLE_DIR, MOVE_DIR"/flip",    MOVE_FLIP,    sizeof(MOVE_FLIP));
+  read_table(TABLE_DIR, MOVE_DIR"/twist",   MOVE_TWIST,   sizeof(MOVE_TWIST));
+  read_table(TABLE_DIR, MOVE_DIR"/slice",   MOVE_SLICE,   sizeof(MOVE_SLICE));
+  read_table(TABLE_DIR, MOVE_DIR"/edgeU",   MOVE_EDGE_U,  sizeof(MOVE_EDGE_U));
+  read_table(TABLE_DIR, MOVE_DIR"/edgeD",   MOVE_EDGE_D,  sizeof(MOVE_EDGE_D));
+  read_table(TABLE_DIR, MOVE_DIR"/edgeUD",  MOVE_EDGE_UD, sizeof(MOVE_EDGE_UD));
+  read_table(TABLE_DIR, MOVE_DIR"/corner",  MOVE_CORNER,  sizeof(MOVE_CORNER));
   read_table(TABLE_DIR, MOVE_DIR"/mergeUD", MERGE_EDGE_UD, sizeof(MERGE_EDGE_UD));
-  finish();
-  start("Reading heuristic tables");
-  read_table(TABLE_DIR, HEURISTIC_DIR"/phase1-noB", HEURISTIC_PHASE1, N_PHASE1 / 4);
-  read_table(TABLE_DIR, HEURISTIC_DIR"/phase2-noB", HEURISTIC_PHASE2, N_PHASE2 / 2);
-  read_table(TABLE_DIR, HEURISTIC_DIR"/phase2-noB-2u", HEURISTIC_PHASE2_2U, 100 * sizeof(uint64_t));
-  finish();
-  start("Caching heuristic tables");
+  map_table(TABLE_DIR, HEURISTIC_DIR"/phase1-noB", (void **)&HEURISTIC_PHASE1, N_PHASE1 / 4);
+  map_table(TABLE_DIR, HEURISTIC_DIR"/phase2-noB", (void **)&HEURISTIC_PHASE2, N_PHASE2 / 2);
+  map_table(TABLE_DIR, HEURISTIC_DIR"/phase2-noB-2u", (void **)&HEURISTIC_PHASE2_2U, NMEMB_2U * sizeof(uint64_t));
+
+  clock_gettime(CLOCK_REALTIME, &start);
+  printf("%-32s", "Caching heuristic tables...");
+  fflush(stdout);
   for (index = 0; index < N_PHASE1 / 4; index += 64)
     sum += HEURISTIC_PHASE1[index];
   for (index = 0; index < N_PHASE2 / 2; index += 64)
     sum += HEURISTIC_PHASE2[index];
-  finish();
+  clock_gettime(CLOCK_REALTIME, &now); \
+  printf("Done in %6.3fs\n", delta_t(now, start));
+
   printf("%-32s0x%013lX\n", "Cache Sum:", sum);
   printf("%-32s0x%013lX\n", "Cache Size:",
     sizeof(MOVE_FLIP) + sizeof(MOVE_TWIST) + sizeof(MOVE_SLICE) +
     sizeof(MOVE_EDGE_U) + sizeof(MOVE_EDGE_D) + sizeof(MOVE_EDGE_UD) +
     sizeof(MOVE_CORNER) + sizeof(MERGE_EDGE_UD) + sizeof(MOVE_PARITY) +
-    N_PHASE1 / 4 + N_PHASE2 / 2 + 100 * sizeof(uint64_t));
+    N_PHASE1 / 4 + N_PHASE2 / 2 + NMEMB_2U * sizeof(uint64_t));
 }
 
 static bool to_string(search_frame_t *search, int depth, char *solution) {
